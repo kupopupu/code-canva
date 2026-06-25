@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="vi">
+
+<head>
+    <script src="/_sdk/telemetry_sdk.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Quản Lý Cho Vay Góp</title>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="./css/styles.css">
+    <script src="/_sdk/resizing_sdk.js" type="text/javascript"></script>
+</head>
+
+<body data-template-id="__page-root" class="min-h-screen"><!-- Header -->
+    <header class="sticky top-0 z-30 bg-white/90 backdrop-blur-sm border-b border-gray-100 px-4 py-3">
+        <h1 data-template-id="app-header" class="canva-header text-lg font-bold text-gray-800"></h1>
+    </header><!-- Dashboard View -->
+    <div id="view-dashboard" class="view active px-4 pt-4">
+        <div class="grid grid-cols-2 gap-3 mb-4">
+            <div class="stat-card">
+                <p class="text-xs text-gray-500 mb-1">Tổng cho vay</p>
+                <p id="val-total-lending" class="text-lg font-bold text-gray-800">0đ</p>
+            </div>
+            <div class="stat-card">
+                <p class="text-xs text-gray-500 mb-1">Tổng nợ</p>
+                <p id="val-total-debt" class="text-lg font-bold text-gray-800">0đ</p>
+            </div>
+            <div class="stat-card">
+                <p class="text-xs text-gray-500 mb-1">Tồn quỹ</p>
+                <p id="val-fund-balance" class="text-lg font-bold text-blue-600">0đ</p>
+            </div>
+            <div class="stat-card">
+                <p class="text-xs text-gray-500 mb-1">Nợ ngoài</p>
+                <p id="val-external-debt" class="text-lg font-bold text-gray-800">0đ</p>
+            </div>
+        </div>
+        <div class="mt-6">
+            <h3 class="font-semibold text-gray-700 mb-3 text-sm">Hoạt động hôm nay</h3>
+            <div class="card p-4">
+                <div class="flex justify-between items-end mb-2">
+                    <div>
+                        <p class="text-xs text-gray-500 mb-1">Đã thu / Cần thu</p>
+                        <p class="text-lg font-bold text-gray-800"><span id="dash-today-collected"
+                                class="text-green-600">0đ</span> <span class="text-sm font-normal text-gray-400">/ <span
+                                    id="dash-today-expected">0đ</span></span></p>
+                    </div>
+                    <div class="text-right">
+                        <span id="dash-today-pct"
+                            class="text-sm font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md">0%</span>
+                    </div>
+                </div>
+                <div class="w-full bg-gray-100 rounded-full h-2">
+                    <div id="dash-today-progress" class="bg-blue-500 h-2 rounded-full transition-all duration-500"
+                        style="width:0%"></div>
+                </div>
+            </div>
+        </div>
+        <div class="mt-6 mb-24">
+            <h3 class="font-semibold text-gray-700 mb-3 text-sm">Chờ thu hôm nay</h3>
+            <div id="dash-pending-list" class="space-y-2"></div>
+            <p id="dash-no-pending" class="text-center text-gray-400 py-4 text-xs hidden">Đã thu đủ hết hôm nay! 🎉</p>
+        </div>
+        <div class="fixed bottom-[70px] left-4 right-4 z-30">
+            <button onclick="showCreateLoanModal()"
+                class="btn-primary flex items-center justify-center gap-2 w-full py-3.5 text-base shadow-[0_4px_12px_rgba(37,99,235,0.25)]">
+                <i data-lucide="plus" style="width:20px;height:20px"></i> <span>Tạo khoản vay mới</span>
+            </button>
+        </div>
+    </div><!-- Loans View -->
+    <div id="view-loans" class="view px-4 pt-4">
+        <div class="flex gap-2 mb-4"><button onclick="filterLoans('active')"
+                class="tag-filter active-filter btn-secondary text-sm px-3 py-1.5 rounded-lg">Đang vay</button> <button
+                onclick="filterLoans('completed')" class="tag-filter btn-secondary text-sm px-3 py-1.5 rounded-lg">Hoàn
+                thành</button>
+        </div>
+        <div id="loans-list"></div>
+        <p id="no-loans" class="text-center text-gray-400 py-8 text-sm">Chưa có khoản vay</p>
+    </div><!-- Funds View -->
+    <div id="view-funds" class="view px-4 pt-4">
+        <h2 data-template-id="funds-title" class="canva-text font-semibold text-gray-700 mb-3"></h2>
+        <div id="funds-list"></div><button onclick="showAddFundModal()"
+            class="btn-primary mt-4 flex items-center justify-center gap-2"> <i data-lucide="plus"
+                style="width:18px;height:18px"></i> <span data-template-id="add-fund-btn" class="canva-text"></span>
+        </button>
+    </div><!-- Stats View -->
+    <div id="view-stats" class="view px-4 pt-4">
+        <h2 data-template-id="stats-title" class="canva-text font-semibold text-gray-700 mb-3"></h2>
+        <div class="flex gap-2 mb-4 overflow-x-auto"><button onclick="filterStats('day')"
+                class="btn-secondary text-xs px-3 py-1.5 rounded-lg whitespace-nowrap">Hôm nay</button> <button
+                onclick="filterStats('month')"
+                class="btn-secondary text-xs px-3 py-1.5 rounded-lg whitespace-nowrap">Tháng này</button> <button
+                onclick="filterStats('year')" class="btn-secondary text-xs px-3 py-1.5 rounded-lg whitespace-nowrap">Năm
+                nay</button> <button onclick="filterStats('all')"
+                class="btn-secondary text-xs px-3 py-1.5 rounded-lg whitespace-nowrap">Tất cả</button>
+        </div>
+        <div id="stats-content" class="space-y-3">
+            <div class="card p-4">
+                <p class="text-xs text-gray-500">Tổng gốc cho vay</p>
+                <p id="stat-principal" class="text-xl font-bold text-gray-800">0đ</p>
+            </div>
+            <div class="card p-4">
+                <p class="text-xs text-gray-500">Tổng lãi dự kiến</p>
+                <p id="stat-expected-interest" class="text-xl font-bold text-blue-600">0đ</p>
+            </div>
+            <div class="card p-4">
+                <p class="text-xs text-gray-500">Lãi đã thu</p>
+                <p id="stat-collected-interest" class="text-xl font-bold text-green-600">0đ</p>
+            </div>
+            <div class="card p-4">
+                <p class="text-xs text-gray-500">Lãi chưa thu</p>
+                <p id="stat-pending-interest" class="text-xl font-bold text-orange-500">0đ</p>
+            </div>
+            <div class="card p-4">
+                <p class="text-xs text-gray-500">Khách nợ nhiều nhất</p>
+                <p id="stat-top-debtor" class="text-lg font-bold text-gray-800">-</p>
+            </div>
+        </div>
+    </div><!-- Loan Detail View -->
+    <div id="view-detail" class="view px-4 pt-4"><button onclick="goBack()"
+            class="flex items-center gap-1 text-blue-600 text-sm mb-3"> <i data-lucide="arrow-left"
+                style="width:16px;height:16px"></i> Quay lại </button>
+        <div class="card p-4 mb-3">
+            <div class="flex justify-between items-start mb-2">
+                <div>
+                    <p id="detail-name" class="font-bold text-gray-800 text-lg"></p>
+                    <p id="detail-loan-id" class="text-xs text-gray-400"></p>
+                </div><span id="detail-status" class="tag"></span>
+            </div>
+            <div class="grid grid-cols-2 gap-3 mt-3 text-sm">
+                <div>
+                    <p class="text-gray-400 text-xs">Tiền gốc</p>
+                    <p id="detail-principal" class="font-semibold"></p>
+                </div>
+                <div>
+                    <p class="text-gray-400 text-xs">Lãi suất</p>
+                    <p id="detail-rate" class="font-semibold"></p>
+                </div>
+                <div>
+                    <p class="text-gray-400 text-xs">Góp/ngày</p>
+                    <p id="detail-daily" class="font-semibold"></p>
+                </div>
+                <div>
+                    <p class="text-gray-400 text-xs">Ngày bắt đầu</p>
+                    <p id="detail-start" class="font-semibold"></p>
+                </div>
+                <div>
+                    <p class="text-gray-400 text-xs">Đã góp</p>
+                    <p id="detail-paid" class="font-semibold text-green-600"></p>
+                </div>
+                <div>
+                    <p class="text-gray-400 text-xs">Còn nợ</p>
+                    <p id="detail-remaining" class="font-semibold text-red-500"></p>
+                </div>
+            </div>
+            <div class="mt-3">
+                <div class="flex justify-between text-xs text-gray-500 mb-1"><span>Tiến độ</span><span
+                        id="detail-progress-pct">0%</span>
+                </div>
+                <div class="progress-bar">
+                    <div id="detail-progress-bar" class="progress-fill" style="width:0%"></div>
+                </div>
+            </div>
+        </div>
+        <h3 class="font-semibold text-gray-700 mb-2 text-sm">Lịch góp</h3>
+        <div id="payment-grid" class="grid grid-cols-4 gap-2 mb-4"></div>
+    </div><!-- Bottom Navigation -->
+    <nav class="bottom-nav flex justify-around py-2"><button onclick="switchView('dashboard')"
+            class="nav-item active flex flex-col items-center gap-0.5 px-3 py-1" data-nav="dashboard"> <i
+                data-lucide="layout-dashboard" style="width:20px;height:20px"></i> <span
+                class="text-[10px] font-medium">Dashboard</span> </button> <button onclick="switchView('loans')"
+            class="nav-item flex flex-col items-center gap-0.5 px-3 py-1" data-nav="loans"> <i data-lucide="wallet"
+                style="width:20px;height:20px"></i> <span class="text-[10px] font-medium">Khoản vay</span> </button>
+        <button onclick="switchView('funds')" class="nav-item flex flex-col items-center gap-0.5 px-3 py-1"
+            data-nav="funds"> <i data-lucide="landmark" style="width:20px;height:20px"></i> <span
+                class="text-[10px] font-medium">Nguồn vốn</span> </button> <button onclick="switchView('stats')"
+            class="nav-item flex flex-col items-center gap-0.5 px-3 py-1" data-nav="stats"> <i data-lucide="bar-chart-3"
+                style="width:20px;height:20px"></i> <span class="text-[10px] font-medium">Thống kê</span> </button>
+    </nav><!-- Create Loan Modal -->
+    <div id="modal-create-loan" class="modal-overlay">
+        <div class="modal-sheet">
+            <div class="flex justify-between items-center mb-4">
+                <h2 data-template-id="create-loan-title" class="canva-text font-bold text-lg text-gray-800">Tạo khoản vay</h2><button
+                    onclick="closeModal('modal-create-loan')" class="p-1"><i data-lucide="x"
+                        style="width:20px;height:20px"></i></button>
+            </div>
+            <form id="loan-form" class="space-y-3" onsubmit="handleCreateLoan(event)">
+                <div><label class="text-xs font-medium text-gray-600 mb-1 block" for="loan-borrower">Tên người
+                        vay</label> <input id="loan-borrower" class="input-field" required>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div><label class="text-xs font-medium text-gray-600 mb-1 block" for="loan-give-date">Ngày giao
+                            tiền</label> <input id="loan-give-date" type="date" class="input-field" required>
+                    </div>
+                    <div><label class="text-xs font-medium text-gray-600 mb-1 block" for="loan-start-date">Ngày bắt đầu
+                            góp</label> <input id="loan-start-date" type="date" class="input-field" required>
+                    </div>
+                </div>
+                <div><label class="text-xs font-medium text-gray-600 mb-1 block" for="loan-principal">Số tiền vay
+                        (Gốc)</label> <input id="loan-principal" type="text" class="input-field" required
+                        oninput="formatCurrency(this); calculateLoanInfo()">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div><label class="text-xs font-medium text-gray-600 mb-1 block" for="loan-duration">Số ngày góp
+                            gốc</label> <input id="loan-duration" type="number" class="input-field" required
+                            oninput="calculateLoanInfo()">
+                    </div>
+                    <div><label class="text-xs font-medium text-gray-600 mb-1 block" for="loan-interest-days">Số ngày
+                            lãi</label> <input id="loan-interest-days" type="number" class="input-field" required
+                            value="0" oninput="calculateLoanInfo()">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div><label class="text-xs font-medium text-gray-600 mb-1 block" for="loan-daily">Tiền
+                            góp/ngày</label> <input id="loan-daily" type="text" class="input-field bg-gray-50" readonly>
+                    </div>
+                    <div><label class="text-xs font-medium text-gray-600 mb-1 block" for="loan-end-date">Ngày kết
+                            thúc</label> <input id="loan-end-date" type="date" class="input-field bg-gray-50" readonly
+                            required>
+                    </div>
+                </div>
+                <div><label class="text-xs font-medium text-gray-600 mb-1 block">Loại khoản vay</label>
+                    <div class="flex gap-3"><label class="flex items-center gap-2 text-sm"><input type="radio"
+                                name="loan-type" value="new" checked> Khoản mới</label> <label
+                            class="flex items-center gap-2 text-sm"><input type="radio" name="loan-type"
+                                value="renewal"> Vay tiếp</label>
+                    </div>
+                </div>
+                <div id="renewal-section" class="hidden"><label class="text-xs font-medium text-gray-600 mb-1 block"
+                        for="prev-loan-select">Chọn khoản vay cũ</label> <select id="prev-loan-select"
+                        class="input-field">
+                        <option value="">-- Chọn --</option>
+                    </select>
+                    <p id="old-debt-info" class="text-xs text-orange-500 mt-1 hidden"></p>
+                </div>
+                <div>
+                    <label class="text-xs font-medium text-gray-600 mb-1 block">Nguồn vốn</label>
+                    <div id="fund-sources-container" class="space-y-2">
+                        <div class="flex gap-2 items-center fund-row">
+                            <input list="fund-list" type="text" class="input-field flex-1 fund-select" value="Quỹ chung"
+                                placeholder="Tên nguồn" required>
+                            <input type="text" class="input-field w-1/3 fund-amount" placeholder="Số tiền" required
+                                oninput="formatCurrency(this)">
+                            <button type="button" onclick="addFundRow()"
+                                class="p-2 bg-blue-100 text-blue-600 rounded-lg flex-shrink-0"><i data-lucide="plus"
+                                    style="width:18px;height:18px"></i></button>
+                        </div>
+                    </div>
+                    <datalist id="fund-list"></datalist>
+                    <p id="fund-error" class="text-xs text-red-500 mt-1 hidden">Tổng nguồn tiền phải bằng số tiền vay
+                    </p>
+                </div><button type="submit" id="btn-submit-loan" class="btn-primary mt-2">Tạo khoản vay</button>
+            </form>
+        </div>
+    </div><!-- Add Fund Modal -->
+    <div id="modal-add-fund" class="modal-overlay">
+        <div class="modal-sheet">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="font-bold text-lg text-gray-800">Thêm nguồn vốn</h2><button
+                    onclick="closeModal('modal-add-fund')" class="p-1"><i data-lucide="x"
+                        style="width:20px;height:20px"></i></button>
+            </div>
+            <form id="fund-form" class="space-y-3" onsubmit="handleAddFund(event)">
+                <div><label class="text-xs font-medium text-gray-600 mb-1 block" for="fund-name">Tên nguồn</label>
+                    <input id="fund-name" class="input-field" required>
+                </div>
+                <div><label class="text-xs font-medium text-gray-600 mb-1 block" for="fund-amount">Số tiền</label>
+                    <input id="fund-amount" type="number" class="input-field" required>
+                </div><button type="submit" class="btn-primary">Thêm nguồn vốn</button>
+            </form>
+        </div>
+    </div><!-- Payment Modal -->
+    <div id="modal-payment" class="modal-overlay">
+        <div class="modal-sheet">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="font-bold text-lg text-gray-800">Ghi nhận thanh toán</h2><button
+                    onclick="closeModal('modal-payment')" class="p-1"><i data-lucide="x"
+                        style="width:20px;height:20px"></i></button>
+            </div>
+            <form id="payment-form" class="space-y-3" onsubmit="handlePayment(event)">
+                <input type="hidden" id="payment-date">
+                <div><label class="text-xs font-medium text-gray-600 mb-1 block" for="payment-amount">Số tiền
+                        góp</label> <input id="payment-amount" type="text" class="input-field" required
+                        oninput="formatCurrency(this)">
+                </div>
+                <p id="payment-info" class="text-xs text-gray-500"></p><button type="submit" class="btn-primary">Xác nhận</button>
+            </form>
+        </div>
+    </div>
+    <!-- Pay Debt Modal -->
+    <div id="modal-pay-debt" class="modal-overlay">
+        <div class="modal-sheet">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="font-bold text-lg text-gray-800">Trả nợ nguồn ngoài</h2><button
+                    onclick="closeModal('modal-pay-debt')" class="p-1"><i data-lucide="x"
+                        style="width:20px;height:20px"></i></button>
+            </div>
+            <form id="pay-debt-form" class="space-y-3" onsubmit="handlePayDebt(event)">
+                <input type="hidden" id="debt-target-name">
+                <input type="hidden" id="debt-max-amount">
+                <div class="bg-gray-50 p-3 rounded-lg mb-4 text-sm">
+                    <p class="text-gray-600 mb-1">Trả nợ cho: <span id="debt-target-label" class="font-bold text-gray-800"></span></p>
+                    <p class="text-gray-600">Tồn quỹ chung: <span id="debt-quy-chung-label" class="font-bold text-blue-600"></span></p>
+                </div>
+                <div><label class="text-xs font-medium text-gray-600 mb-1 block" for="debt-pay-amount">Số tiền trả (lấy từ Quỹ chung)</label>
+                    <input id="debt-pay-amount" type="text" class="input-field" required
+                        oninput="formatCurrency(this)">
+                </div>
+                <button type="submit" class="btn-primary">Xác nhận trả nợ</button>
+            </form>
+        </div>
+    </div>
+    <datalist id="fund-list"></datalist>
+    <script src="/_sdk/editing_sdk.js"></script>
+    <script src="/_sdk/data_sdk.js"></script>
+    <script type="module" src="./js/app.js"></script>
+</body>
+
+</html>

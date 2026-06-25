@@ -1,0 +1,11 @@
+# Database credentials
+tools/db_credentials.txt
+
+# Local development / OS files
+.DS_Store
+Thumbs.db
+node_modules/
+dist/
+.env
+.env.local
+.env.*.local
