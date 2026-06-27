@@ -12,7 +12,8 @@ const norm = str => str ? str.normalize('NFC').trim().toLowerCase() : '';
 
 function generateBorrowerId(name) {
     const loans = getLoans();
-    const existing = loans.find(l => l.borrower_name.trim().toLowerCase() === name.trim().toLowerCase());
+    const safeName = norm(name);
+    const existing = loans.find(l => norm(l.borrower_name) === safeName);
     if (existing && existing.borrower_id) return existing.borrower_id;
     
     let max = 0;
@@ -332,7 +333,7 @@ async function handleCreateLoan(e) {
         closeModal('modal-create-loan');
         document.getElementById('loan-form').reset();
         showToast('Tạo khoản vay thành công!');
-    } else { showToast('Lỗi: ' + result.error.message); }
+    } else { showToast('Lỗi: ' + (result.error.message || result.error.error || JSON.stringify(result.error))); }
 }
 
 // Add Fund
@@ -1041,7 +1042,7 @@ async function handleEditLoan(e) {
         closeModal('modal-edit-loan');
         showToast('Cập nhật khoản vay thành công!');
     } else {
-        showToast('Lỗi: ' + result.error.message);
+        showToast('Lỗi: ' + (result.error.message || result.error.error || 'Unknown'));
     }
 }
 
