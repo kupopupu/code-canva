@@ -338,19 +338,76 @@ async function handleCreateLoan(e) {
 async function handleAddFund(e) {
     e.preventDefault();
     if (allData.length >= 999) { showToast('Đã đạt giới hạn'); return; }
-    const record = {
-        type: 'fund',
-        fund_name: document.getElementById('fund-name').value,
-        fund_amount: Number(document.getElementById('fund-amount').value),
-        borrower_name: '', borrower_id: '', loan_id: '', principal: 0,
-        interest_rate: 0, daily_payment: 0, start_date: '', first_payment_date: '',
-        end_date: '', status: '', is_renewal: false, previous_loan_id: '',
-        old_debt_deducted: 0, source_allocations: '', payments_json: '',
-        total_paid: 0, total_interest_earned: 0, completed_date: '', notes: ''
-    };
-    const result = await window.dataSdk.create(record);
+    const nameInput = document.getElementById('fund-name').value.trim();
+    const amountInput = Number(document.getElementById('fund-amount').value);
+    
+    const existing = allData.find(r => r.type === 'fund' && r.fund_name.toLowerCase() === nameInput.toLowerCase());
+    
+    let record;
+    if (existing) {
+        record = {
+            ...existing,
+            fund_amount: (existing.fund_amount || 0) + amountInput
+        };
+    } else {
+        record = {
+            type: 'fund',
+            fund_name: nameInput,
+            fund_amount: amountInput,
+            borrower_name: '', borrower_id: '', loan_id: '', principal: 0,
+            interest_rate: 0, daily_payment: 0, start_date: '', first_payment_date: '',
+            end_date: '', status: '', is_renewal: false, previous_loan_id: '',
+            old_debt_deducted: 0, source_allocations: '', payments_json: '',
+            total_paid: 0, total_interest_earned: 0, completed_date: '', notes: ''
+        };
+    }
+
+    const result = await (existing ? window.dataSdk.update(record) : window.dataSdk.create(record));
     if (result.isOk) { closeModal('modal-add-fund'); document.getElementById('fund-form').reset(); showToast('Đã thêm nguồn vốn'); }
     else { showToast('Lỗi'); }
+}
+
+function openAddMoneyModal(name) {
+    document.getElementById('add-money-fund-name').value = name;
+    document.getElementById('add-money-fund-label').textContent = name;
+    document.getElementById('add-money-amount').value = '';
+    document.getElementById('modal-add-money').classList.add('show');
+}
+
+async function handleAddMoney(e) {
+    e.preventDefault();
+    const name = document.getElementById('add-money-fund-name').value;
+    const amount = getNumericValue(document.getElementById('add-money-amount').value);
+    if (amount <= 0) return;
+
+    const existing = allData.find(r => r.type === 'fund' && r.fund_name.toLowerCase() === name.toLowerCase());
+    
+    let record;
+    if (existing) {
+        record = {
+            ...existing,
+            fund_amount: (existing.fund_amount || 0) + amount
+        };
+    } else {
+        record = {
+            type: 'fund',
+            fund_name: name,
+            fund_amount: amount,
+            borrower_name: '', borrower_id: '', loan_id: '', principal: 0,
+            interest_rate: 0, daily_payment: 0, start_date: '', first_payment_date: '',
+            end_date: '', status: '', is_renewal: false, previous_loan_id: '',
+            old_debt_deducted: 0, source_allocations: '', payments_json: '',
+            total_paid: 0, total_interest_earned: 0, completed_date: '', notes: ''
+        };
+    }
+
+    const result = await (existing ? window.dataSdk.update(record) : window.dataSdk.create(record));
+    if (result.isOk) {
+        closeModal('modal-add-money');
+        showToast('Đã thêm tiền vào quỹ thành công!');
+    } else {
+        showToast('Lỗi khi thêm tiền');
+    }
 }
 
 // Pay Debt
@@ -691,7 +748,18 @@ function renderFunds() {
         const color = f.amount < 0 ? 'text-red-500' : 'text-blue-600';
         let actionBtn = '';
         if (f.amount < 0 && f.name.toLowerCase() !== 'quỹ chung') {
-            actionBtn = `<button onclick="openPayDebtModal('${f.name}', ${Math.abs(f.amount)})" class="text-xs bg-red-100 text-red-600 px-2 py-1 rounded mt-1">Trả nợ</button>`;
+            actionBtn = `
+                <div class="flex gap-2 mt-1">
+                    <button onclick="openPayDebtModal('${f.name}', ${Math.abs(f.amount)})" class="text-xs bg-red-100 text-red-600 px-2 py-1 rounded">Trả nợ</button>
+                    <button onclick="openAddMoneyModal('${f.name}')" class="text-xs bg-green-100 text-green-600 px-2 py-1 rounded">+ Thêm tiền</button>
+                </div>
+            `;
+        } else {
+            actionBtn = `
+                <div class="flex gap-2 mt-1">
+                    <button onclick="openAddMoneyModal('${f.name}')" class="text-xs bg-green-100 text-green-600 px-2 py-1 rounded">+ Thêm tiền</button>
+                </div>
+            `;
         }
         return `<div class="card p-3 mb-2 flex justify-between items-center">
     <div>
@@ -818,6 +886,8 @@ window.populatePrevLoanSelect = populatePrevLoanSelect;
 window.calculateLoanInfo = calculateLoanInfo;
 window.handleCreateLoan = handleCreateLoan;
 window.handleAddFund = handleAddFund;
+window.openAddMoneyModal = openAddMoneyModal;
+window.handleAddMoney = handleAddMoney;
 window.openPayDebtModal = openPayDebtModal;
 window.handlePayDebt = handlePayDebt;
 window.openPaymentModal = openPaymentModal;
