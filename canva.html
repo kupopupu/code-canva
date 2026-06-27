@@ -119,15 +119,9 @@
             </div>
         </div>
     </div><!-- Loan Detail View -->
-    <div id="view-detail" class="view px-4 pt-4">
-         <div class="flex justify-between items-center mb-3">
-             <button onclick="goBack()" class="flex items-center gap-1 text-blue-600 text-sm"> 
-                 <i data-lucide="arrow-left" style="width:16px;height:16px"></i> Quay lại 
-             </button>
-             <button onclick="showEditLoanModal()" class="flex items-center gap-1 text-blue-600 text-sm bg-blue-50 px-2.5 py-1.5 rounded-lg font-medium hover:bg-blue-100 transition-colors"> 
-                 <i data-lucide="edit" style="width:16px;height:16px"></i> Chỉnh sửa 
-             </button>
-         </div>
+    <div id="view-detail" class="view px-4 pt-4"><button onclick="goBack()"
+            class="flex items-center gap-1 text-blue-600 text-sm mb-3"> <i data-lucide="arrow-left"
+                style="width:16px;height:16px"></i> Quay lại </button>
         <div class="card p-4 mb-3">
             <div class="flex justify-between items-start mb-2">
                 <div>
@@ -193,10 +187,9 @@
                         style="width:20px;height:20px"></i></button>
             </div>
             <form id="loan-form" class="space-y-3" onsubmit="handleCreateLoan(event)">
-                <div class="relative"><label class="text-xs font-medium text-gray-600 mb-1 block" for="loan-borrower">Tên người
-                         vay</label> <input id="loan-borrower" class="input-field" required autocomplete="off" onfocus="showBorrowerDropdown(this)" oninput="filterBorrowerDropdown(this)" onblur="hideBorrowerDropdown(this)">
-                     <div id="borrower-dropdown" class="hidden absolute z-[100] w-full bg-white border border-gray-200 rounded-xl shadow-xl max-h-40 overflow-y-auto mt-1 top-full left-0"></div>
-                 </div>
+                <div><label class="text-xs font-medium text-gray-600 mb-1 block" for="loan-borrower">Tên người
+                        vay</label> <input id="loan-borrower" class="input-field" required>
+                </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div><label class="text-xs font-medium text-gray-600 mb-1 block" for="loan-give-date">Ngày giao
                             tiền</label> <input id="loan-give-date" type="date" class="input-field" required>
@@ -261,56 +254,7 @@
                 </div><button type="submit" id="btn-submit-loan" class="btn-primary mt-2">Tạo khoản vay</button>
             </form>
         </div>
-     </div><!-- Edit Loan Modal -->
-     <div id="modal-edit-loan" class="modal-overlay">
-         <div class="modal-sheet">
-             <div class="flex justify-between items-center mb-4">
-                 <h2 class="font-bold text-lg text-gray-800">Chỉnh sửa khoản vay</h2><button
-                     onclick="closeModal('modal-edit-loan')" class="p-1"><i data-lucide="x"
-                         style="width:20px;height:20px"></i></button>
-             </div>
-             <form id="edit-loan-form" class="space-y-3" onsubmit="handleEditLoan(event)">
-                 <div><label class="text-xs font-medium text-gray-600 mb-1 block" for="edit-loan-borrower">Tên người
-                         vay</label> <input id="edit-loan-borrower" class="input-field" required>
-                 </div>
-                 <div class="grid grid-cols-2 gap-3">
-                     <div><label class="text-xs font-medium text-gray-600 mb-1 block" for="edit-loan-give-date">Ngày giao
-                             tiền</label> <input id="edit-loan-give-date" type="date" class="input-field" required>
-                     </div>
-                     <div><label class="text-xs font-medium text-gray-600 mb-1 block" for="edit-loan-start-date">Ngày bắt đầu
-                             góp</label> <input id="edit-loan-start-date" type="date" class="input-field" required>
-                     </div>
-                 </div>
-                 <div><label class="text-xs font-medium text-gray-600 mb-1 block" for="edit-loan-principal">Số tiền vay
-                         (Gốc)</label> <input id="edit-loan-principal" type="text" class="input-field" required
-                         oninput="formatCurrency(this); calculateEditLoanInfo()">
-                 </div>
-                 <div class="grid grid-cols-2 gap-3">
-                     <div><label class="text-xs font-medium text-gray-600 mb-1 block" for="edit-loan-duration">Số ngày góp
-                             gốc</label> <input id="edit-loan-duration" type="number" class="input-field" required
-                             oninput="calculateEditLoanInfo()">
-                     </div>
-                     <div><label class="text-xs font-medium text-gray-600 mb-1 block" for="edit-loan-interest-days">Số ngày
-                             lãi</label> <input id="edit-loan-interest-days" type="number" class="input-field" required
-                             value="0" oninput="calculateEditLoanInfo()">
-                     </div>
-                 </div>
-                 <div class="grid grid-cols-2 gap-3">
-                     <div><label class="text-xs font-medium text-gray-600 mb-1 block" for="edit-loan-daily">Tiền
-                             góp/ngày</label> <input id="edit-loan-daily" type="text" class="input-field bg-gray-50" readonly>
-                     </div>
-                     <div><label class="text-xs font-medium text-gray-600 mb-1 block" for="edit-loan-end-date">Ngày kết
-                             thúc</label> <input id="edit-loan-end-date" type="date" class="input-field bg-gray-50" readonly
-                             required>
-                     </div>
-                 </div>
-                 <div><label class="text-xs font-medium text-gray-600 mb-1 block" for="edit-loan-notes">Ghi chú</label>
-                     <textarea id="edit-loan-notes" class="input-field w-full" placeholder="Ghi chú điều chỉnh..." rows="2"></textarea>
-                 </div>
-                 <button type="submit" id="btn-submit-edit-loan" class="btn-primary mt-2">Lưu thay đổi</button>
-             </form>
-         </div>
-     </div><!-- Add Fund Modal -->
+    </div><!-- Add Fund Modal -->
     <div id="modal-add-fund" class="modal-overlay">
         <div class="modal-sheet">
             <div class="flex justify-between items-center mb-4">

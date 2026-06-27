@@ -37,9 +37,9 @@ module.exports = async (req, res) => {
 
             await sql`
                 INSERT INTO app_records (type, record_id, data)
-                VALUES (${type}, ${record_id}, ${record})
+                VALUES (${type}, ${record_id}, ${JSON.stringify(record)})
                 ON CONFLICT (record_id) 
-                DO UPDATE SET data = ${record}, updated_at = NOW()
+                DO UPDATE SET data = ${JSON.stringify(record)}, updated_at = NOW()
             `;
             return res.status(200).json({ success: true });
         }
@@ -57,7 +57,7 @@ module.exports = async (req, res) => {
 
             await sql`
                 UPDATE app_records 
-                SET data = ${record}, updated_at = NOW()
+                SET data = ${JSON.stringify(record)}, updated_at = NOW()
                 WHERE record_id = ${record_id}
             `;
             return res.status(200).json({ success: true });

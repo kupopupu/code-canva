@@ -8,12 +8,10 @@ let loanFilter = 'active';
 const fmt = n => new Intl.NumberFormat('vi-VN').format(n || 0) + 'đ';
 const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const today = () => new Date().toISOString().slice(0, 10);
-const norm = str => str ? str.normalize('NFC').trim().toLowerCase() : '';
 
 function generateBorrowerId(name) {
     const loans = getLoans();
-    const safeName = norm(name);
-    const existing = loans.find(l => norm(l.borrower_name) === safeName);
+    const existing = loans.find(l => l.borrower_name && l.borrower_name.trim().toLowerCase() === name.trim().toLowerCase());
     if (existing && existing.borrower_id) return existing.borrower_id;
     
     let max = 0;
@@ -59,7 +57,7 @@ function switchView(view) {
     if (view === 'stats') renderStats();
 }
 
-function goBack() { switchView(currentView === 'detail' ? 'loans' : 'dashboard'); }
+function goBack() { switchView(currentView); }
 
 function formatCurrency(input) {
     let val = input.value.replace(/\D/g, '');
@@ -81,7 +79,7 @@ function addFundRow() {
         <input type="text" autocomplete="off" class="input-field w-full fund-select" placeholder="Tên nguồn" required onfocus="showFundDropdown(this)" oninput="filterFundDropdown(this)" onblur="hideFundDropdown(this)">
         <div class="fund-dropdown hidden absolute z-[100] w-full bg-white border border-gray-200 rounded-xl shadow-xl max-h-40 overflow-y-auto mt-1 top-full left-0"></div>
     </div>
-    <input type="text" class="input-field w-1/3 fund-amount" placeholder="Số tiền" required oninput="formatCurrency(this)">
+    <input type="text" inputmode="numeric" pattern="[0-9]*" class="input-field w-1/3 fund-amount" placeholder="Số tiền" required oninput="formatCurrency(this)">
     <button type="button" onclick="this.parentElement.remove()" class="p-2 bg-red-100 text-red-600 rounded-lg flex-shrink-0"><i data-lucide="minus" style="width:18px;height:18px"></i></button>
 `;
     container.appendChild(row);
@@ -98,7 +96,7 @@ function showCreateLoanModal() {
             <input type="text" autocomplete="off" class="input-field w-full fund-select" value="Quỹ chung" placeholder="Tên nguồn" required onfocus="showFundDropdown(this)" oninput="filterFundDropdown(this)" onblur="hideFundDropdown(this)">
             <div class="fund-dropdown hidden absolute z-[100] w-full bg-white border border-gray-200 rounded-xl shadow-xl max-h-40 overflow-y-auto mt-1 top-full left-0"></div>
         </div>
-        <input type="text" class="input-field w-1/3 fund-amount" placeholder="Số tiền" required oninput="formatCurrency(this)">
+        <input type="text" inputmode="numeric" pattern="[0-9]*" class="input-field w-1/3 fund-amount" placeholder="Số tiền" required oninput="formatCurrency(this)">
         <button type="button" onclick="addFundRow()" class="p-2 bg-blue-100 text-blue-600 rounded-lg flex-shrink-0"><i data-lucide="plus" style="width:18px;height:18px"></i></button>
     </div>
 `;
@@ -245,12 +243,12 @@ async function handleCreateLoan(e) {
         if (amt > 0) {
             totalFundAmount += amt;
             sourceAllocations.push(`${fundName}: ${fmt(amt)}`);
-            if (norm(fundName) === norm('Quỹ chung')) qcUsed += amt;
+            if (fundName.toLowerCase() === 'quỹ chung') qcUsed += amt;
         }
     });
 
     const fundBalances = getFundBalances();
-    const quyChung = fundBalances.find(f => norm(f.name) === norm('Quỹ chung'));
+    const quyChung = fundBalances.find(f => f.name.toLowerCase() === 'quỹ chung');
     const qcAmount = quyChung ? quyChung.amount : 0;
 
     if (qcUsed > qcAmount) {
@@ -333,7 +331,155 @@ async function handleCreateLoan(e) {
         closeModal('modal-create-loan');
         document.getElementById('loan-form').reset();
         showToast('Tạo khoản vay thành công!');
-    } else { showToast('Lỗi: ' + (result.error.message || result.error.error || JSON.stringify(result.error))); }
+    } else { showToast('Lỗi: ' + (result.error.error || result.error.message || JSON.stringify(result.error))); }
+}
+
+// Autocomplete Suggestions
+function getUniqueBorrowers() {
+    const loans = getLoans();
+    const map = new Map();
+    loans.forEach(l => {
+        if (l.borrower_name) {
+            map.set(l.borrower_name.toLowerCase(), l.borrower_name);
+        }
+    });
+    return Array.from(map.values());
+}
+
+function showBorrowerSuggestions(input, type = 'create') {
+    const val = input.value.toLowerCase();
+    const dropdown = type === 'create' ? document.getElementById('borrower-suggestions') : document.getElementById('edit-borrower-suggestions');
+    if (!dropdown) return;
+    
+    const borrowers = getUniqueBorrowers();
+    let filtered = borrowers;
+    if (val) {
+        filtered = borrowers.filter(b => b.toLowerCase().includes(val));
+    }
+    
+    if (filtered.length === 0) {
+        dropdown.classList.add('hidden');
+        return;
+    }
+    
+    dropdown.innerHTML = filtered.map(b => `
+        <div class="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm text-gray-700 transition-colors" 
+             onmousedown="event.preventDefault(); document.getElementById('${input.id}').value = '${b}'; document.getElementById('${dropdown.id}').classList.add('hidden');">
+             ${b}
+        </div>
+    `).join('');
+    dropdown.classList.remove('hidden');
+}
+
+function hideBorrowerSuggestions(input) {
+    setTimeout(() => {
+        const dropdown = input.nextElementSibling;
+        if (dropdown) dropdown.classList.add('hidden');
+    }, 150);
+}
+
+// Edit Loan
+function openEditLoanModal() {
+    if (!currentLoan) return;
+    document.getElementById('edit-loan-id').value = currentLoan.loan_id;
+    document.getElementById('edit-loan-borrower').value = currentLoan.borrower_name;
+    
+    const duration = Math.round(currentLoan.principal / currentLoan.daily_payment) || 0;
+    const totalRequired = currentLoan.principal * (1 + currentLoan.interest_rate / 100);
+    const interestAmt = totalRequired - currentLoan.principal;
+    const interestDays = interestAmt > 0 ? Math.round(interestAmt / currentLoan.daily_payment) : 0;
+
+    let giveDate = currentLoan.start_date;
+    if (!giveDate) {
+        const d = new Date(currentLoan.first_payment_date);
+        d.setDate(d.getDate() - 1);
+        giveDate = d.toISOString().slice(0, 10);
+    }
+
+    document.getElementById('edit-loan-give-date').value = giveDate;
+    document.getElementById('edit-loan-start-date').value = currentLoan.first_payment_date;
+    document.getElementById('edit-loan-principal').value = new Intl.NumberFormat('en-US').format(currentLoan.principal);
+    document.getElementById('edit-loan-duration').value = duration;
+    document.getElementById('edit-loan-interest-days').value = interestDays;
+    
+    calculateEditLoanInfo();
+    document.getElementById('modal-edit-loan').classList.add('show');
+}
+
+function calculateEditLoanInfo() {
+    const principal = getNumericValue(document.getElementById('edit-loan-principal').value);
+    const duration = Number(document.getElementById('edit-loan-duration').value) || 0;
+    const interestDays = Number(document.getElementById('edit-loan-interest-days').value) || 0;
+    const startDateVal = document.getElementById('edit-loan-start-date').value;
+
+    if (principal > 0 && duration > 0) {
+        const daily = Math.round(principal / duration);
+        document.getElementById('edit-loan-daily').value = new Intl.NumberFormat('en-US').format(daily);
+
+        if (startDateVal) {
+            const start = new Date(startDateVal);
+            const totalDays = duration + interestDays;
+            start.setDate(start.getDate() + totalDays);
+            document.getElementById('edit-loan-end-date').value = start.toISOString().slice(0, 10);
+        }
+    } else {
+        document.getElementById('edit-loan-daily').value = '';
+        document.getElementById('edit-loan-end-date').value = '';
+    }
+}
+
+document.getElementById('edit-loan-give-date').addEventListener('change', function() {
+    if (this.value) {
+        const d = new Date(this.value);
+        d.setDate(d.getDate() + 1);
+        document.getElementById('edit-loan-start-date').value = d.toISOString().slice(0, 10);
+        calculateEditLoanInfo();
+    }
+});
+document.getElementById('edit-loan-start-date').addEventListener('change', calculateEditLoanInfo);
+
+async function handleEditLoan(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btn-submit-edit-loan');
+    btn.disabled = true; btn.textContent = 'Đang lưu...';
+
+    const principal = getNumericValue(document.getElementById('edit-loan-principal').value);
+    const duration = Number(document.getElementById('edit-loan-duration').value);
+    const interestDays = Number(document.getElementById('edit-loan-interest-days').value);
+    const dailyPayment = principal > 0 && duration > 0 ? Math.round(principal / duration) : 0;
+    const interestRate = principal > 0 ? ((interestDays * dailyPayment) / principal) * 100 : 0;
+    const borrowerName = document.getElementById('edit-loan-borrower').value;
+
+    const updatedLoan = {
+        ...currentLoan,
+        borrower_name: borrowerName,
+        principal: principal,
+        interest_rate: interestRate,
+        daily_payment: dailyPayment,
+        start_date: document.getElementById('edit-loan-give-date').value,
+        first_payment_date: document.getElementById('edit-loan-start-date').value,
+        end_date: document.getElementById('edit-loan-end-date').value
+    };
+
+    const totalRequired = principal * (1 + interestRate / 100);
+    if ((updatedLoan.total_paid || 0) >= totalRequired) {
+        updatedLoan.status = 'completed';
+        if (!updatedLoan.completed_date) updatedLoan.completed_date = today();
+    } else {
+        updatedLoan.status = 'active';
+        updatedLoan.completed_date = '';
+    }
+
+    const result = await window.dataSdk.update(updatedLoan);
+    btn.disabled = false; btn.textContent = 'Lưu thay đổi';
+    if (result.isOk) {
+        closeModal('modal-edit-loan');
+        showToast('Đã cập nhật khoản vay!');
+        currentLoan = updatedLoan;
+        showLoanDetail(currentLoan.loan_id);
+    } else { 
+        showToast('Lỗi: ' + (result.error?.message || 'Không xác định')); 
+    }
 }
 
 // Add Fund
@@ -343,7 +489,7 @@ async function handleAddFund(e) {
     const nameInput = document.getElementById('fund-name').value.trim();
     const amountInput = Number(document.getElementById('fund-amount').value);
     
-    const existing = allData.find(r => r.type === 'fund' && norm(r.fund_name) === norm(nameInput));
+    const existing = allData.find(r => r.type === 'fund' && r.fund_name.toLowerCase() === nameInput.toLowerCase());
     
     let record;
     if (existing) {
@@ -382,7 +528,7 @@ async function handleAddMoney(e) {
     const amount = getNumericValue(document.getElementById('add-money-amount').value);
     if (amount <= 0) return;
 
-    const existing = allData.find(r => r.type === 'fund' && norm(r.fund_name) === norm(name));
+    const existing = allData.find(r => r.type === 'fund' && r.fund_name.toLowerCase() === name.toLowerCase());
     
     let record;
     if (existing) {
@@ -415,7 +561,7 @@ async function handleAddMoney(e) {
 // Pay Debt
 function openPayDebtModal(name, maxAmount) {
     const fundBalances = getFundBalances();
-    const quyChung = fundBalances.find(f => norm(f.name) === norm('Quỹ chung'));
+    const quyChung = fundBalances.find(f => f.name.toLowerCase() === 'quỹ chung');
     const qcAmount = quyChung ? quyChung.amount : 0;
     
     document.getElementById('debt-target-name').value = name;
@@ -434,7 +580,7 @@ async function handlePayDebt(e) {
     const payAmount = getNumericValue(document.getElementById('debt-pay-amount').value);
     
     const fundBalances = getFundBalances();
-    const quyChung = fundBalances.find(f => norm(f.name) === norm('Quỹ chung'));
+    const quyChung = fundBalances.find(f => f.name.toLowerCase() === 'quỹ chung');
     const qcAmount = quyChung ? quyChung.amount : 0;
 
     if (payAmount <= 0) return;
@@ -581,9 +727,9 @@ function renderDashboard() {
     const totalDebt = loans.reduce((s, l) => s + ((l.principal * (1 + l.interest_rate / 100)) - (l.total_paid || 0)), 0);
     
     const fundBalances = getFundBalances();
-    const quyChung = fundBalances.find(f => norm(f.name) === norm('Quỹ chung'));
+    const quyChung = fundBalances.find(f => f.name.toLowerCase() === 'quỹ chung');
     const fundBalance = quyChung ? quyChung.amount : 0;
-    const externalDebt = fundBalances.filter(f => norm(f.name) !== norm('Quỹ chung') && f.amount < 0).reduce((s, f) => s + Math.abs(f.amount), 0);
+    const externalDebt = fundBalances.filter(f => f.name.toLowerCase() !== 'quỹ chung' && f.amount < 0).reduce((s, f) => s + Math.abs(f.amount), 0);
 
     document.getElementById('val-total-lending').textContent = fmt(totalLending);
     document.getElementById('val-total-debt').textContent = fmt(Math.max(0, totalDebt));
@@ -600,15 +746,16 @@ function renderDashboard() {
         const end = new Date(l.end_date);
         const tObj = new Date(tDate);
         if (tObj >= start && tObj <= end) {
-            expectedToday += l.daily_payment;
             const payments = JSON.parse(l.payments_json || '[]');
-            const dayPayments = payments.filter(p => p.date === tDate);
+            const dayPayments = payments.filter(p => (p.time && p.time.startsWith(tDate)) || (!p.time && p.date === tDate));
             const dayTotal = dayPayments.reduce((s, p) => s + p.amount, 0);
             collectedToday += dayTotal;
 
             const daysPassed = Math.floor((tObj - start) / (1000 * 60 * 60 * 24)) + 1;
             const expectedTotalUntilToday = daysPassed * l.daily_payment;
-            const currentDebt = expectedTotalUntilToday - (l.total_paid || 0);
+            const currentDebt = Math.max(0, expectedTotalUntilToday - (l.total_paid || 0));
+
+            expectedToday += currentDebt + dayTotal;
 
             if (currentDebt > 0) {
                 let balance = l.total_paid || 0;
@@ -699,33 +846,44 @@ function renderLoans() {
     if (loans.length === 0) { list.innerHTML = ''; noMsg.style.display = ''; return; }
     noMsg.style.display = 'none';
     list.innerHTML = loans.map(l => {
-        const totalRequired = l.principal * (1 + (l.interest_rate || 0) / 100);
+        const totalRequired = l.principal * (1 + l.interest_rate / 100);
         const pct = Math.min(100, Math.round(((l.total_paid || 0) / totalRequired) * 100));
-        return `<div class="borrower-card flex-col !items-stretch gap-2" onclick="showLoanDetail('${l.loan_id}')">
-            <div class="flex justify-between items-center w-full">
-                <div>
-                    <p class="font-semibold text-sm">${l.borrower_name}</p>
-                    <div class="flex flex-col items-start gap-1 mt-1.5">
-                        <span class="bg-gray-100 text-gray-500 text-[10px] px-1.5 py-0.5 rounded font-mono max-w-[120px] truncate" title="Mã KH">${l.borrower_id}</span>
-                        <span class="bg-blue-50 text-blue-500 text-[10px] px-1.5 py-0.5 rounded font-mono max-w-[120px] truncate" title="Mã vay">${l.loan_id}</span>
-                    </div>
-                </div>
-                <div class="text-right flex flex-col items-end">
-                    <p class="text-sm font-semibold">${fmt(l.principal)}</p>
-                    <span class="tag ${l.status === 'active' ? 'bg-blue-50 text-blue-600' : 'bg-green-50 text-green-600'} text-[10px] mt-1">${l.status === 'active' ? 'Đang vay' : 'Hoàn thành'}</span>
+        
+        const totalDays = l.daily_payment > 0 ? Math.round(totalRequired / l.daily_payment) : 0;
+        const completedDays = l.daily_payment > 0 ? Math.floor((l.total_paid || 0) / l.daily_payment) : 0;
+        const start = new Date(l.first_payment_date);
+        const tObj = new Date(today());
+        const daysPassed = Math.max(0, Math.floor((tObj - start) / (1000 * 60 * 60 * 24)) + 1);
+        const expectedTotalUntilToday = daysPassed * l.daily_payment;
+        const currentDebt = Math.max(0, expectedTotalUntilToday - (l.total_paid || 0));
+        const debtDays = l.daily_payment > 0 ? Math.floor(currentDebt / l.daily_payment) : 0;
+
+        let progressText = `${completedDays}/${totalDays} ngày`;
+        if (debtDays > 0) progressText += ` <span class="text-red-500 font-medium">(Nợ: ${debtDays} ngày)</span>`;
+
+        return `<div class="borrower-card" onclick="showLoanDetail('${l.loan_id}')">
+    <div class="flex-1 w-full">
+        <div class="flex justify-between items-start w-full">
+            <div>
+                <p class="font-semibold text-sm">${l.borrower_name}</p>
+                <div class="flex flex-col items-start gap-1 mt-1.5">
+                    <span class="bg-gray-100 text-gray-500 text-[10px] px-1.5 py-0.5 rounded font-mono max-w-[120px] truncate" title="Mã KH">${l.borrower_id}</span>
+                    <span class="bg-blue-50 text-blue-500 text-[10px] px-1.5 py-0.5 rounded font-mono max-w-[120px] truncate" title="Mã vay">${l.loan_id}</span>
                 </div>
             </div>
-            <!-- Progress Bar -->
-            <div class="mt-1 w-full">
-                <div class="flex justify-between text-[10px] text-gray-400 mb-0.5">
-                    <span>Tiến độ: ${pct}%</span>
-                    <span>Đã góp: ${fmt(l.total_paid || 0)} / ${fmt(totalRequired)}</span>
-                </div>
-                <div class="progress-bar h-1">
-                    <div class="progress-fill" style="width: ${pct}%"></div>
-                </div>
+            <div class="text-right flex flex-col items-end">
+                <p class="text-sm font-semibold">${fmt(l.principal)}</p>
+                <span class="tag ${l.status === 'active' ? 'bg-blue-50 text-blue-600' : 'bg-green-50 text-green-600'} text-[10px] mt-1">${l.status === 'active' ? 'Đang vay' : 'Hoàn thành'}</span>
             </div>
-        </div>`;
+        </div>
+        <div class="mt-3 w-full">
+            <div class="flex justify-between text-[10px] text-gray-500 mb-1"><span>Tiến độ: ${progressText}</span><span>${pct}%</span></div>
+            <div class="w-full bg-gray-100 rounded-full h-1.5">
+                <div class="bg-blue-500 h-1.5 rounded-full" style="width:${pct}%"></div>
+            </div>
+        </div>
+    </div>
+</div>`
     }).join('');
 }
 
@@ -735,64 +893,28 @@ function getFundBalances() {
     const funds = getFunds();
     const loans = getLoans();
     const balances = {};
-    
-    // Initialize fund balances from database records
-    funds.forEach(f => { 
-        balances[norm(f.fund_name)] = { name: f.fund_name, amount: Number(f.fund_amount) || 0 }; 
-    });
-    
-    const qcKey = norm('Quỹ chung');
-    if (!balances[qcKey]) {
-        balances[qcKey] = { name: 'Quỹ chung', amount: 0 };
-    }
+    funds.forEach(f => { balances[f.fund_name.toLowerCase()] = { name: f.fund_name, amount: f.fund_amount || 0 }; });
+    if (!balances['quỹ chung']) balances['quỹ chung'] = { name: 'Quỹ chung', amount: 0 };
 
     let totalCollected = 0;
     loans.forEach(l => {
-        totalCollected += (Number(l.total_paid) || 0);
-        
-        // Subtract old debt deducted (rollover portion) from Quỹ chung since it was transferred to the new loan principal
-        if (l.is_renewal && l.old_debt_deducted) {
-            balances[qcKey].amount -= (Number(l.old_debt_deducted) || 0);
-        }
-        
+        totalCollected += (l.total_paid || 0);
         if (l.source_allocations) {
             l.source_allocations.split(' | ').forEach(p => {
                 const parts = p.split(': ');
                 if (parts.length === 2) {
                     const name = parts[0];
                     const amt = getNumericValue(parts[1]);
-                    const key = norm(name);
-                    if (!balances[key]) {
-                        balances[key] = { name: name, amount: 0 };
-                    }
+                    const key = name.toLowerCase();
+                    if (!balances[key]) balances[key] = { name: name, amount: 0 };
                     balances[key].amount -= amt;
                 }
             });
         }
     });
 
-    // Add all collected payments to Quỹ chung
-    balances[qcKey].amount += totalCollected;
-    
-    // Process fund transfers / debt payments
-    allData.filter(r => r.type === 'fund_transfer').forEach(t => {
-        const fromKey = norm(t.from);
-        const toKey = norm(t.to);
-        const amt = Number(t.amount) || 0;
-        
-        if (fromKey) {
-            if (!balances[fromKey]) balances[fromKey] = { name: t.from, amount: 0 };
-            balances[fromKey].amount -= amt;
-        }
-        if (toKey) {
-            if (!balances[toKey]) balances[toKey] = { name: t.to, amount: 0 };
-            balances[toKey].amount += amt;
-        }
-    });
-
-    if (balances[qcKey].amount < 0) {
-        balances[qcKey].amount = 0;
-    }
+    balances['quỹ chung'].amount += totalCollected;
+    if (balances['quỹ chung'].amount < 0) balances['quỹ chung'].amount = 0;
 
     return Object.values(balances);
 }
@@ -828,11 +950,11 @@ function renderFunds() {
 }
 
 function renderStats() {
-    const loans = getLoans();
+    const loans = getLoans().filter(l => l.principal !== undefined);
     const totalPrincipal = loans.reduce((s, l) => s + (l.principal || 0), 0);
-    const totalExpInterest = loans.reduce((s, l) => s + (l.principal * l.interest_rate / 100), 0);
+    const totalExpInterest = loans.reduce((s, l) => s + ((l.principal || 0) * (l.interest_rate || 0) / 100), 0);
     const totalCollected = loans.reduce((s, l) => {
-        const interest = Math.max(0, (l.total_paid || 0) - l.principal);
+        const interest = Math.max(0, (l.total_paid || 0) - (l.principal || 0));
         return s + interest;
     }, 0);
     document.getElementById('stat-principal').textContent = fmt(totalPrincipal);
@@ -843,8 +965,8 @@ function renderStats() {
     const active = loans.filter(l => l.status === 'active');
     if (active.length > 0) {
         const top = active.sort((a, b) => {
-            const ra = (a.principal * (1 + a.interest_rate / 100)) - (a.total_paid || 0);
-            const rb = (b.principal * (1 + b.interest_rate / 100)) - (b.total_paid || 0);
+            const ra = ((a.principal || 0) * (1 + (a.interest_rate || 0) / 100)) - (a.total_paid || 0);
+            const rb = ((b.principal || 0) * (1 + (b.interest_rate || 0) / 100)) - (b.total_paid || 0);
             return rb - ra;
         })[0];
         document.getElementById('stat-top-debtor').textContent = `${top.borrower_name} (${fmt((top.principal * (1 + top.interest_rate / 100)) - (top.total_paid || 0))})`;
@@ -894,6 +1016,23 @@ function handleTouchEnd(e, el) {
     swipeCurrentX = 0;
 }
 
+// Global edge swipe back for detail view
+let edgeSwipeStartX = 0;
+document.addEventListener('touchstart', (e) => {
+    if (document.getElementById('view-detail').classList.contains('active')) {
+        edgeSwipeStartX = e.touches[0].clientX;
+    }
+}, {passive: true});
+
+document.addEventListener('touchend', (e) => {
+    if (document.getElementById('view-detail').classList.contains('active')) {
+        let diff = e.changedTouches[0].clientX - edgeSwipeStartX;
+        if (edgeSwipeStartX < 40 && diff > 70) {
+            goBack();
+        }
+    }
+}, {passive: true});
+
 async function quickPayToday(loanId, amount) {
     if (!confirm('Xác nhận đã thu đủ ' + fmt(amount) + '?')) {
         document.querySelectorAll('.swipeable-card').forEach(c => c.style.transform = 'translateX(0px)');
@@ -904,32 +1043,26 @@ async function quickPayToday(loanId, amount) {
 
     const tDate = today();
     const payments = JSON.parse(currentLoanLocal.payments_json || '[]');
-    
-    // Distribute amount to unpaid days chronologically
     const start = new Date(currentLoanLocal.first_payment_date);
     const tObj = new Date(tDate);
-    let remainingAmount = amount;
-    const nowTime = new Date().toISOString();
-
-    for (let d = new Date(start); d <= tObj; d.setDate(d.getDate() + 1)) {
-        if (remainingAmount <= 0) break;
+    
+    let remainingAmountToDistribute = amount;
+    
+    for (let d = new Date(start); d <= tObj && remainingAmountToDistribute > 0; d.setDate(d.getDate() + 1)) {
         const dateStr = d.toISOString().slice(0, 10);
         const dayPayments = payments.filter(p => p.date === dateStr);
         const dayTotal = dayPayments.reduce((s, p) => s + p.amount, 0);
-        const dailyPay = currentLoanLocal.daily_payment;
-        if (dayTotal < dailyPay) {
-            const needed = dailyPay - dayTotal;
-            const toPay = Math.min(remainingAmount, needed);
-            if (toPay > 0) {
-                payments.push({ date: dateStr, amount: toPay, time: nowTime });
-                remainingAmount -= toPay;
-            }
+        const missingForDay = currentLoanLocal.daily_payment - dayTotal;
+        
+        if (missingForDay > 0) {
+            const payAmt = Math.min(missingForDay, remainingAmountToDistribute);
+            payments.push({ date: dateStr, amount: payAmt, time: new Date().toISOString() });
+            remainingAmountToDistribute -= payAmt;
         }
     }
-    
-    // If there is still remaining amount, add to today
-    if (remainingAmount > 0) {
-        payments.push({ date: tDate, amount: remainingAmount, time: nowTime });
+
+    if (remainingAmountToDistribute > 0) {
+        payments.push({ date: tDate, amount: remainingAmountToDistribute, time: new Date().toISOString() });
     }
 
     const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
@@ -941,163 +1074,10 @@ async function quickPayToday(loanId, amount) {
     }
     const result = await window.dataSdk.update(updatedLoan);
     if (result.isOk) {
-        showToast('Đã ghi nhận!');
+        showToast('Đã ghi nhận đủ!');
     } else {
         showToast('Lỗi ghi nhận!');
     }
-}
-
-// Edit Loan Functions
-function showEditLoanModal() {
-    if (!currentLoan) return;
-    document.getElementById('modal-edit-loan').classList.add('show');
-    document.getElementById('edit-loan-borrower').value = currentLoan.borrower_name;
-    document.getElementById('edit-loan-give-date').value = currentLoan.start_date || '';
-    document.getElementById('edit-loan-start-date').value = currentLoan.first_payment_date || '';
-    document.getElementById('edit-loan-principal').value = new Intl.NumberFormat('en-US').format(currentLoan.principal);
-    
-    const daily = currentLoan.daily_payment || 1;
-    const duration = Math.round(currentLoan.principal / daily);
-    document.getElementById('edit-loan-duration').value = duration;
-    
-    let interestDays = 0;
-    if (currentLoan.first_payment_date && currentLoan.end_date) {
-        const diffTime = Math.abs(new Date(currentLoan.end_date) - new Date(currentLoan.first_payment_date));
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        interestDays = Math.max(0, diffDays - duration);
-    }
-    document.getElementById('edit-loan-interest-days').value = interestDays;
-    document.getElementById('edit-loan-notes').value = currentLoan.notes || '';
-    
-    calculateEditLoanInfo();
-}
-
-function calculateEditLoanInfo() {
-    const principal = getNumericValue(document.getElementById('edit-loan-principal').value);
-    const duration = Number(document.getElementById('edit-loan-duration').value) || 0;
-    const interestDays = Number(document.getElementById('edit-loan-interest-days').value) || 0;
-    const startDateVal = document.getElementById('edit-loan-start-date').value;
-
-    if (principal > 0 && duration > 0) {
-        const daily = Math.round(principal / duration);
-        document.getElementById('edit-loan-daily').value = new Intl.NumberFormat('en-US').format(daily);
-
-        if (startDateVal) {
-            const start = new Date(startDateVal);
-            const totalDays = duration + interestDays;
-            start.setDate(start.getDate() + totalDays);
-            document.getElementById('edit-loan-end-date').value = start.toISOString().slice(0, 10);
-        }
-    } else {
-        document.getElementById('edit-loan-daily').value = '';
-        document.getElementById('edit-loan-end-date').value = '';
-    }
-}
-
-async function handleEditLoan(e) {
-    e.preventDefault();
-    if (!currentLoan) return;
-    const btn = document.getElementById('btn-submit-edit-loan');
-    btn.disabled = true; btn.textContent = 'Đang lưu...';
-
-    const borrowerName = document.getElementById('edit-loan-borrower').value;
-    const principal = getNumericValue(document.getElementById('edit-loan-principal').value);
-    const duration = Number(document.getElementById('edit-loan-duration').value);
-    const interestDays = Number(document.getElementById('edit-loan-interest-days').value);
-    const dailyPayment = principal > 0 && duration > 0 ? Math.round(principal / duration) : 0;
-    const interestRate = principal > 0 ? ((interestDays * dailyPayment) / principal) * 100 : 0;
-    
-    const payments = getPayments(currentLoan.loan_id);
-    const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
-    const totalRequired = principal * (1 + interestRate / 100);
-
-    let status = currentLoan.status;
-    let completedDate = currentLoan.completed_date;
-    if (totalPaid >= totalRequired) {
-        status = 'completed';
-        if (!completedDate) completedDate = today();
-    } else {
-        status = 'active';
-        completedDate = '';
-    }
-
-    const updatedLoan = {
-        ...currentLoan,
-        borrower_name: borrowerName,
-        principal: principal,
-        interest_rate: interestRate,
-        daily_payment: dailyPayment,
-        start_date: document.getElementById('edit-loan-give-date').value,
-        first_payment_date: document.getElementById('edit-loan-start-date').value,
-        end_date: document.getElementById('edit-loan-end-date').value,
-        notes: document.getElementById('edit-loan-notes').value,
-        total_paid: totalPaid,
-        status: status,
-        completed_date: completedDate
-    };
-
-    const result = await window.dataSdk.update(updatedLoan);
-    btn.disabled = false; btn.textContent = 'Lưu thay đổi';
-    if (result.isOk) {
-        closeModal('modal-edit-loan');
-        showToast('Cập nhật khoản vay thành công!');
-    } else {
-        showToast('Lỗi: ' + (result.error.message || result.error.error || 'Unknown'));
-    }
-}
-
-// Borrower Autocomplete Functions
-function getUniqueBorrowers() {
-    const loans = getLoans();
-    const map = new Map();
-    loans.forEach(l => {
-        if (l.borrower_name && l.borrower_id) {
-            const key = norm(l.borrower_name);
-            if (!map.has(key)) {
-                map.set(key, { name: l.borrower_name.trim(), code: l.borrower_id });
-            }
-        }
-    });
-    return Array.from(map.values());
-}
-
-function showBorrowerDropdown(input) {
-    const dropdown = document.getElementById('borrower-dropdown');
-    renderBorrowerDropdownItems(input, dropdown);
-    dropdown.classList.remove('hidden');
-}
-
-function filterBorrowerDropdown(input) {
-    const dropdown = document.getElementById('borrower-dropdown');
-    renderBorrowerDropdownItems(input, dropdown);
-    dropdown.classList.remove('hidden');
-}
-
-function hideBorrowerDropdown(input) {
-    setTimeout(() => {
-        const dropdown = document.getElementById('borrower-dropdown');
-        if (dropdown) dropdown.classList.add('hidden');
-    }, 150);
-}
-
-function renderBorrowerDropdownItems(input, dropdown) {
-    const val = norm(input.value);
-    const borrowers = getUniqueBorrowers();
-    let filtered = borrowers;
-    if (val) {
-        filtered = borrowers.filter(b => norm(b.name).includes(val) || norm(b.code).includes(val));
-    }
-    if (filtered.length === 0) {
-        dropdown.innerHTML = `<div class="px-3 py-2 text-xs text-gray-400">Khách hàng mới</div>`;
-        return;
-    }
-    dropdown.innerHTML = filtered.map(b => `
-        <div class="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm text-gray-700 transition-colors flex justify-between items-center" 
-             onmousedown="event.preventDefault(); document.getElementById('loan-borrower').value = '${b.name}'; document.getElementById('borrower-dropdown').classList.add('hidden');">
-             <span class="font-medium">${b.name}</span>
-             <span class="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-mono">${b.code}</span>
-        </div>
-    `).join('');
 }
 
 // Window bindings
@@ -1144,23 +1124,36 @@ window.handleTouchStart = handleTouchStart;
 window.handleTouchMove = handleTouchMove;
 window.handleTouchEnd = handleTouchEnd;
 window.quickPayToday = quickPayToday;
-window.showEditLoanModal = showEditLoanModal;
+window.showBorrowerSuggestions = showBorrowerSuggestions;
+window.hideBorrowerSuggestions = hideBorrowerSuggestions;
+window.openEditLoanModal = openEditLoanModal;
 window.calculateEditLoanInfo = calculateEditLoanInfo;
 window.handleEditLoan = handleEditLoan;
-window.getUniqueBorrowers = getUniqueBorrowers;
-window.showBorrowerDropdown = showBorrowerDropdown;
-window.filterBorrowerDropdown = filterBorrowerDropdown;
-window.hideBorrowerDropdown = hideBorrowerDropdown;
-window.renderBorrowerDropdownItems = renderBorrowerDropdownItems;
 
 // ==========================================
 // KẾT NỐI VÀ KHỞI TẠO DỮ LIỆU (DATABASE SDK)
 // ==========================================
 
+function showLoading() {
+    const loader = document.getElementById('loading-overlay');
+    if (loader) {
+        loader.classList.remove('hidden');
+        loader.classList.add('flex');
+    }
+}
+function hideLoading() {
+    const loader = document.getElementById('loading-overlay');
+    if (loader) {
+        loader.classList.add('hidden');
+        loader.classList.remove('flex');
+    }
+}
+
 if (!window.dataSdk) {
     window.dataSdk = {
         data: [],
         async fetchAll() {
+            showLoading();
             try {
                 const res = await fetch('/api/data');
                 if (res.ok) {
@@ -1170,9 +1163,12 @@ if (!window.dataSdk) {
             } catch (e) {
                 console.error('Error fetching data:', e);
                 showToast('Không kết nối được cơ sở dữ liệu!');
+            } finally {
+                hideLoading();
             }
         },
         async create(record) {
+            showLoading();
             try {
                 const res = await fetch('/api/data', {
                     method: 'POST',
@@ -1188,15 +1184,18 @@ if (!window.dataSdk) {
                 try {
                     err = JSON.parse(textStr);
                 } catch(e) {
-                    err = { error: textStr || 'API error or endpoint not found' };
+                    err = { error: `HTTP ${res.status}: ` + (textStr || 'Lỗi không xác định từ Server') };
                 }
                 return { isOk: false, error: err };
             } catch (e) {
                 console.error('Error creating record:', e);
                 return { isOk: false, error: e };
+            } finally {
+                hideLoading();
             }
         },
         async update(record) {
+            showLoading();
             try {
                 const res = await fetch('/api/data', {
                     method: 'PUT',
@@ -1212,12 +1211,14 @@ if (!window.dataSdk) {
                 try {
                     err = JSON.parse(textStr);
                 } catch(e) {
-                    err = { error: textStr || 'API error or endpoint not found' };
+                    err = { error: `HTTP ${res.status}: ` + (textStr || 'Lỗi không xác định từ Server') };
                 }
                 return { isOk: false, error: err };
             } catch (e) {
                 console.error('Error updating record:', e);
                 return { isOk: false, error: e };
+            } finally {
+                hideLoading();
             }
         },
         async init(handler) {
@@ -1225,7 +1226,7 @@ if (!window.dataSdk) {
             if (window.location.protocol === 'file:') {
                 console.log('Running as local file, using LocalStorage fallback.');
                 const stored = JSON.parse(localStorage.getItem('loan_data') || '[]');
-                if (!stored.find(r => r.type === 'fund' && norm(r.fund_name) === norm('Quỹ chung'))) {
+                if (!stored.find(r => r.type === 'fund' && r.fund_name.toLowerCase() === 'quỹ chung')) {
                     stored.push({
                         type: 'fund',
                         fund_id: 'default-quy-chung',
@@ -1278,9 +1279,35 @@ const dataHandler = {
     }
 };
 
-(async () => {
+const ALLOWED_PHONES = ['0966767731', '0335030381'];
+
+window.handleLogin = function() {
+    const phone = document.getElementById('login-phone').value.trim();
+    if (ALLOWED_PHONES.includes(phone)) {
+        localStorage.setItem('auth_phone', phone);
+        document.getElementById('login-screen').classList.add('hidden');
+        document.getElementById('login-screen').classList.remove('flex');
+        document.getElementById('login-error').classList.add('hidden');
+        initApp();
+    } else {
+        document.getElementById('login-error').classList.remove('hidden');
+    }
+};
+
+async function initApp() {
     const result = await window.dataSdk.init(dataHandler);
-    if (!result.isOk) showToast('Lỗi kết nối dữ liệu');
+    if (!result.isOk) showToast('L?i k?t n?i d? li?u');
     lucide.createIcons();
-})();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const phone = localStorage.getItem('auth_phone');
+    if (ALLOWED_PHONES.includes(phone)) {
+        document.getElementById('login-screen').classList.add('hidden');
+        initApp();
+    } else {
+        document.getElementById('login-screen').classList.remove('hidden');
+        document.getElementById('login-screen').classList.add('flex');
+    }
+});
 
