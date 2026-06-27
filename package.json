@@ -2,7 +2,7 @@
   "name": "quan-ly-cho-vay-gop",
   "version": "1.0.0",
   "description": "Ứng dụng quản lý cho vay góp kết nối Neon PostgreSQL",
-  "main": "canva.html",
+  "main": "index.html",
   "dependencies": {
     "@neondatabase/serverless": "^0.9.3",
     "dotenv": "^16.4.5"
