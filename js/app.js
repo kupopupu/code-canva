@@ -1183,7 +1183,12 @@ if (!window.dataSdk) {
                     await this.fetchAll();
                     return { isOk: true };
                 }
-                const err = await res.json();
+                let err;
+                try {
+                    err = await res.json();
+                } catch(e) {
+                    err = { error: await res.text() || 'API error or endpoint not found' };
+                }
                 return { isOk: false, error: err };
             } catch (e) {
                 console.error('Error creating record:', e);
@@ -1201,7 +1206,12 @@ if (!window.dataSdk) {
                     await this.fetchAll();
                     return { isOk: true };
                 }
-                const err = await res.json();
+                let err;
+                try {
+                    err = await res.json();
+                } catch(e) {
+                    err = { error: await res.text() || 'API error or endpoint not found' };
+                }
                 return { isOk: false, error: err };
             } catch (e) {
                 console.error('Error updating record:', e);
