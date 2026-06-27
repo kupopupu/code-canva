@@ -1183,11 +1183,12 @@ if (!window.dataSdk) {
                     await this.fetchAll();
                     return { isOk: true };
                 }
+                const textStr = await res.text();
                 let err;
                 try {
-                    err = await res.json();
+                    err = JSON.parse(textStr);
                 } catch(e) {
-                    err = { error: await res.text() || 'API error or endpoint not found' };
+                    err = { error: textStr || 'API error or endpoint not found' };
                 }
                 return { isOk: false, error: err };
             } catch (e) {
@@ -1206,11 +1207,12 @@ if (!window.dataSdk) {
                     await this.fetchAll();
                     return { isOk: true };
                 }
+                const textStr = await res.text();
                 let err;
                 try {
-                    err = await res.json();
+                    err = JSON.parse(textStr);
                 } catch(e) {
-                    err = { error: await res.text() || 'API error or endpoint not found' };
+                    err = { error: textStr || 'API error or endpoint not found' };
                 }
                 return { isOk: false, error: err };
             } catch (e) {
