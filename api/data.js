@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { createClient } = require('@neondatabase/serverless');
+const { neon } = require('@neondatabase/serverless');
 
 const DATABASE_URL = process.env.DATABASE_URL;
 const usingNeon = Boolean(DATABASE_URL && DATABASE_URL.trim());
@@ -34,11 +34,11 @@ function normalizeRecord(record) {
 async function ensureNeonClient() {
     if (!usingNeon) return;
     if (!neonClient) {
-        neonClient = createClient({ connectionString: DATABASE_URL });
+        neonClient = neon(DATABASE_URL);
     }
     if (neonReady) return;
 
-    await neonClient.query(`
+    await neonClient`
         CREATE TABLE IF NOT EXISTS records (
             id SERIAL PRIMARY KEY,
             type TEXT NOT NULL,
@@ -47,8 +47,8 @@ async function ensureNeonClient() {
             created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
         )
-    `);
-    await neonClient.query(`CREATE INDEX IF NOT EXISTS idx_type ON records(type)`);
+    `;
+    await neonClient`CREATE INDEX IF NOT EXISTS idx_type ON records(type)`;
     neonReady = true;
 }
 
@@ -57,8 +57,8 @@ async function getAllRecords() {
         return ensureFallbackStore();
     }
     await ensureNeonClient();
-    const result = await neonClient.query('SELECT data FROM records ORDER BY id DESC');
-    return result.rows.map(row => (typeof row.data === 'string' ? JSON.parse(row.data) : row.data));
+    const result = await neonClient`SELECT data FROM records ORDER BY id DESC`;
+    return result.map(row => (typeof row.data === 'string' ? JSON.parse(row.data) : row.data));
 }
 
 async function createOrUpdateRecord(record) {
@@ -77,11 +77,10 @@ async function createOrUpdateRecord(record) {
     }
 
     await ensureNeonClient();
-    await neonClient.query(
-        `INSERT INTO records (type, record_id, data) VALUES ($1, $2, $3)
-         ON CONFLICT (record_id) DO UPDATE SET data = EXCLUDED.data, type = EXCLUDED.type, updated_at = CURRENT_TIMESTAMP`,
-        [type, recordId, JSON.stringify(record)]
-    );
+    await neonClient`
+        INSERT INTO records (type, record_id, data) VALUES (${type}, ${recordId}, ${JSON.stringify(record)})
+        ON CONFLICT (record_id) DO UPDATE SET data = EXCLUDED.data, type = EXCLUDED.type, updated_at = CURRENT_TIMESTAMP
+    `;
 }
 
 async function deleteRecord(recordId) {
@@ -92,7 +91,7 @@ async function deleteRecord(recordId) {
     }
 
     await ensureNeonClient();
-    await neonClient.query('DELETE FROM records WHERE record_id = $1', [recordId]);
+    await neonClient`DELETE FROM records WHERE record_id = ${recordId}`;
 }
 
 module.exports = async (req, res) => {

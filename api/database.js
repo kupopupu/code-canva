@@ -1,7 +1,7 @@
 require('dotenv').config();
 const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
-const { createClient } = require('@neondatabase/serverless');
+const { neon } = require('@neondatabase/serverless');
 
 const DB_PATH = path.join(__dirname, '../loan_data.db');
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -18,8 +18,8 @@ async function ensureNeonTable() {
     if (!usingNeon) return;
     if (neonReady) return;
 
-    neonClient = createClient({ connectionString: DATABASE_URL });
-    await neonClient.query(`
+    neonClient = neon(DATABASE_URL);
+    await neonClient`
         CREATE TABLE IF NOT EXISTS records (
             id SERIAL PRIMARY KEY,
             type TEXT NOT NULL,
@@ -28,8 +28,8 @@ async function ensureNeonTable() {
             created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
         )
-    `);
-    await neonClient.query(`CREATE INDEX IF NOT EXISTS idx_type ON records(type)`);
+    `;
+    await neonClient`CREATE INDEX IF NOT EXISTS idx_type ON records(type)`;
     neonReady = true;
 }
 
@@ -88,8 +88,8 @@ const database = {
         if (usingNeon) {
             try {
                 await ensureNeonTable();
-                const result = await neonClient.query('SELECT data FROM records ORDER BY id DESC');
-                callback(null, parseRows(result.rows));
+                const rows = await neonClient`SELECT data FROM records ORDER BY id DESC`;
+                callback(null, parseRows(rows));
             } catch (err) {
                 console.error('❌ Lỗi lấy dữ liệu Neon:', err);
                 callback(err, []);
@@ -120,11 +120,10 @@ const database = {
         if (usingNeon) {
             try {
                 await ensureNeonTable();
-                await neonClient.query(
-                    `INSERT INTO records (type, record_id, data) VALUES ($1, $2, $3)
-                     ON CONFLICT (record_id) DO UPDATE SET data = EXCLUDED.data, type = EXCLUDED.type, updated_at = CURRENT_TIMESTAMP`,
-                    [type, recordId, JSON.stringify(record)]
-                );
+                await neonClient`
+                    INSERT INTO records (type, record_id, data) VALUES (${type}, ${recordId}, ${JSON.stringify(record)})
+                    ON CONFLICT (record_id) DO UPDATE SET data = EXCLUDED.data, type = EXCLUDED.type, updated_at = CURRENT_TIMESTAMP
+                `;
                 console.log(`✅ Bản ghi mới tạo hoặc cập nhật trên Neon: ${recordId}`);
                 callback(null);
             } catch (err) {
@@ -155,11 +154,10 @@ const database = {
         if (usingNeon) {
             try {
                 await ensureNeonTable();
-                await neonClient.query(
-                    `INSERT INTO records (type, record_id, data) VALUES ($1, $2, $3)
-                     ON CONFLICT (record_id) DO UPDATE SET data = EXCLUDED.data, type = EXCLUDED.type, updated_at = CURRENT_TIMESTAMP`,
-                    [type, recordId, JSON.stringify(record)]
-                );
+                await neonClient`
+                    INSERT INTO records (type, record_id, data) VALUES (${type}, ${recordId}, ${JSON.stringify(record)})
+                    ON CONFLICT (record_id) DO UPDATE SET data = EXCLUDED.data, type = EXCLUDED.type, updated_at = CURRENT_TIMESTAMP
+                `;
                 console.log(`✅ Bản ghi Neon cập nhật hoặc tạo mới: ${recordId}`);
                 callback(null);
             } catch (err) {
