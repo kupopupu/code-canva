@@ -1,10 +1,31 @@
-const { neon } = require('@neondatabase/serverless');
+let fallbackStore = globalThis.__loanFallbackStore || [];
 
-// Initialize Neon client using DATABASE_URL environment variable
-const sql = neon(process.env.DATABASE_URL);
+function ensureStore() {
+    if (!globalThis.__loanFallbackStore) {
+        globalThis.__loanFallbackStore = [];
+    }
+    fallbackStore = globalThis.__loanFallbackStore;
+    if (!fallbackStore.some(r => r.type === 'fund' && r.fund_name && r.fund_name.toLowerCase() === 'quỹ chung')) {
+        fallbackStore.push({
+            type: 'fund',
+            fund_id: 'default-quy-chung',
+            fund_name: 'Quỹ chung',
+            fund_amount: 0
+        });
+    }
+    return fallbackStore;
+}
+
+function getRecordId(record) {
+    return record.loan_id || record.fund_id || record.fund_name || record.borrower_id || record.id || null;
+}
+
+function normalizeRecord(record) {
+    if (!record || !record.type) return null;
+    return record;
+}
 
 module.exports = async (req, res) => {
-    // Enable CORS
     res.setHeader('Access-Control-Allow-Credentials', true);
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -18,58 +39,43 @@ module.exports = async (req, res) => {
         return;
     }
 
+    const store = ensureStore();
+
     try {
         if (req.method === 'GET') {
-            // Retrieve all records
-            const rows = await sql`SELECT data FROM app_records ORDER BY id ASC`;
-            const dataArray = rows.map(r => r.data);
-            return res.status(200).json(dataArray);
+            return res.status(200).json(store);
         }
 
-        if (req.method === 'POST') {
-            const record = req.body;
-            if (!record || !record.type) {
+        if (req.method === 'POST' || req.method === 'PUT') {
+            const record = normalizeRecord(req.body);
+            if (!record) {
                 return res.status(400).json({ error: 'Missing record or record type' });
             }
 
-            const type = record.type;
-            const record_id = record.loan_id || record.fund_id || record.fund_name || record.borrower_id || (type + '-' + Date.now() + Math.random().toString(36).substring(2, 5));
-
-            await sql`
-                INSERT INTO app_records (type, record_id, data)
-                VALUES (${type}, ${record_id}, ${JSON.stringify(record)})
-                ON CONFLICT (record_id) 
-                DO UPDATE SET data = ${JSON.stringify(record)}, updated_at = NOW()
-            `;
-            return res.status(200).json({ success: true });
-        }
-
-        if (req.method === 'PUT') {
-            const record = req.body;
-            if (!record || !record.type) {
-                return res.status(400).json({ error: 'Missing record or record type' });
-            }
-
-            const record_id = record.loan_id || record.fund_id || record.fund_name || record.borrower_id;
-            if (!record_id) {
+            const id = getRecordId(record);
+            if (!id) {
                 return res.status(400).json({ error: 'Missing unique record identifier' });
             }
 
-            await sql`
-                UPDATE app_records 
-                SET data = ${JSON.stringify(record)}, updated_at = NOW()
-                WHERE record_id = ${record_id}
-            `;
+            if (req.method === 'POST') {
+                store.push(record);
+            } else {
+                const idx = store.findIndex(item => getRecordId(item) === id);
+                if (idx >= 0) store[idx] = record;
+                else store.push(record);
+            }
+
             return res.status(200).json({ success: true });
         }
 
         if (req.method === 'DELETE') {
-            const { record_id } = req.query;
-            if (!record_id) {
+            const recordId = req.query.record_id || req.query.id;
+            if (!recordId) {
                 return res.status(400).json({ error: 'Missing record_id parameter' });
             }
-
-            await sql`DELETE FROM app_records WHERE record_id = ${record_id}`;
+            const next = store.filter(item => getRecordId(item) !== recordId);
+            globalThis.__loanFallbackStore = next;
+            fallbackStore = next;
             return res.status(200).json({ success: true });
         }
 

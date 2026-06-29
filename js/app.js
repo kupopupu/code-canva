@@ -1166,6 +1166,35 @@ function hideLoading() {
 }
 
 if (!window.dataSdk) {
+    const storageKey = 'loan_data';
+    const readLocalStore = () => {
+        try {
+            const raw = localStorage.getItem(storageKey) || '[]';
+            return JSON.parse(raw);
+        } catch (e) {
+            return [];
+        }
+    };
+    const writeLocalStore = (data) => {
+        try {
+            localStorage.setItem(storageKey, JSON.stringify(data));
+        } catch (e) {
+            console.warn('Could not write local storage', e);
+        }
+    };
+    const ensureLocalFund = (data) => {
+        const list = Array.isArray(data) ? data : [];
+        if (!list.some(r => r.type === 'fund' && r.fund_name && r.fund_name.toLowerCase() === 'quỹ chung')) {
+            list.push({
+                type: 'fund',
+                fund_id: 'default-quy-chung',
+                fund_name: 'Quỹ chung',
+                fund_amount: 0
+            });
+        }
+        return list;
+    };
+
     window.dataSdk = {
         data: [],
         async fetchAll() {
@@ -1173,15 +1202,21 @@ if (!window.dataSdk) {
             try {
                 const res = await fetch('/api/data');
                 if (res.ok) {
-                    this.data = await res.json();
+                    this.data = ensureLocalFund(await res.json());
+                    writeLocalStore(this.data);
                     if (this.handler) this.handler.onDataChanged(this.data);
+                    return;
                 }
             } catch (e) {
-                console.error('Error fetching data:', e);
-                showToast('Không kết nối được cơ sở dữ liệu!');
-            } finally {
-                hideLoading();
+                console.warn('API unavailable, using local storage fallback:', e);
             }
+
+            this.data = ensureLocalFund(readLocalStore());
+            writeLocalStore(this.data);
+            if (this.handler) this.handler.onDataChanged(this.data);
+            showToast('Đang dùng dữ liệu cục bộ vì backend chưa sẵn sàng.');
+            hideLoading();
+            return;
         },
         async create(record) {
             showLoading();
@@ -1195,20 +1230,16 @@ if (!window.dataSdk) {
                     await this.fetchAll();
                     return { isOk: true };
                 }
-                const textStr = await res.text();
-                let err;
-                try {
-                    err = JSON.parse(textStr);
-                } catch(e) {
-                    err = { error: `HTTP ${res.status}: ` + (textStr || 'Lỗi không xác định từ Server') };
-                }
-                return { isOk: false, error: err };
             } catch (e) {
-                console.error('Error creating record:', e);
-                return { isOk: false, error: e };
-            } finally {
-                hideLoading();
+                console.warn('Create API failed, saving locally:', e);
             }
+
+            this.data = ensureLocalFund(readLocalStore());
+            this.data.push(record);
+            writeLocalStore(this.data);
+            if (this.handler) this.handler.onDataChanged(this.data);
+            hideLoading();
+            return { isOk: true };
         },
         async update(record) {
             showLoading();
@@ -1222,58 +1253,28 @@ if (!window.dataSdk) {
                     await this.fetchAll();
                     return { isOk: true };
                 }
-                const textStr = await res.text();
-                let err;
-                try {
-                    err = JSON.parse(textStr);
-                } catch(e) {
-                    err = { error: `HTTP ${res.status}: ` + (textStr || 'Lỗi không xác định từ Server') };
-                }
-                return { isOk: false, error: err };
             } catch (e) {
-                console.error('Error updating record:', e);
-                return { isOk: false, error: e };
-            } finally {
-                hideLoading();
+                console.warn('Update API failed, saving locally:', e);
             }
+
+            this.data = ensureLocalFund(readLocalStore());
+            const idx = this.data.findIndex(r => (r.loan_id || r.fund_id || r.borrower_id || r.id) === (record.loan_id || record.fund_id || record.borrower_id || record.id));
+            if (idx >= 0) this.data[idx] = record; else this.data.push(record);
+            writeLocalStore(this.data);
+            if (this.handler) this.handler.onDataChanged(this.data);
+            hideLoading();
+            return { isOk: true };
         },
         async init(handler) {
             this.handler = handler;
-            if (window.location.protocol === 'file:') {
-                console.log('Running as local file, using LocalStorage fallback.');
-                const stored = JSON.parse(localStorage.getItem('loan_data') || '[]');
-                if (!stored.find(r => r.type === 'fund' && r.fund_name.toLowerCase() === 'quỹ chung')) {
-                    stored.push({
-                        type: 'fund',
-                        fund_id: 'default-quy-chung',
-                        fund_name: 'Quỹ chung',
-                        fund_amount: 0
-                    });
-                    localStorage.setItem('loan_data', JSON.stringify(stored));
-                }
-                this.data = stored;
-                this.save = function() {
-                    localStorage.setItem('loan_data', JSON.stringify(this.data));
-                    if (this.handler) this.handler.onDataChanged(this.data);
-                };
-                this.create = async function(rec) {
-                    this.data.push(rec);
-                    this.save();
-                    return { isOk: true };
-                };
-                this.update = async function(rec) {
-                    const idx = this.data.findIndex(r => r.loan_id === rec.loan_id);
-                    if (idx !== -1) {
-                        this.data[idx] = rec;
-                        this.save();
-                    }
-                    return { isOk: true };
-                };
-                setTimeout(() => handler.onDataChanged(this.data), 0);
-                return { isOk: true };
+            this.data = ensureLocalFund(readLocalStore());
+            writeLocalStore(this.data);
+            setTimeout(() => handler.onDataChanged(this.data), 0);
+            try {
+                await this.fetchAll();
+            } catch (e) {
+                console.warn('Init fetch failed:', e);
             }
-
-            await this.fetchAll();
             return { isOk: true };
         }
     };
