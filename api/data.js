@@ -1,28 +1,98 @@
-let fallbackStore = globalThis.__loanFallbackStore || [];
+require('dotenv').config();
+const { createClient } = require('@neondatabase/serverless');
 
-function ensureStore() {
+const DATABASE_URL = process.env.DATABASE_URL;
+const usingNeon = Boolean(DATABASE_URL && DATABASE_URL.trim());
+let neonClient;
+let neonReady = false;
+
+function ensureFallbackStore() {
     if (!globalThis.__loanFallbackStore) {
         globalThis.__loanFallbackStore = [];
     }
-    fallbackStore = globalThis.__loanFallbackStore;
-    if (!fallbackStore.some(r => r.type === 'fund' && r.fund_name && r.fund_name.toLowerCase() === 'quỹ chung')) {
-        fallbackStore.push({
+    const store = globalThis.__loanFallbackStore;
+    if (!store.some(r => r.type === 'fund' && r.fund_name && r.fund_name.toLowerCase() === 'quỹ chung')) {
+        store.push({
             type: 'fund',
             fund_id: 'default-quy-chung',
             fund_name: 'Quỹ chung',
             fund_amount: 0
         });
     }
-    return fallbackStore;
+    return store;
 }
 
 function getRecordId(record) {
-    return record.loan_id || record.fund_id || record.fund_name || record.borrower_id || record.id || null;
+    return record && (record.loan_id || record.fund_id || record.fund_name || record.borrower_id || record.id || null);
 }
 
 function normalizeRecord(record) {
-    if (!record || !record.type) return null;
+    if (!record || typeof record !== 'object' || !record.type) return null;
     return record;
+}
+
+async function ensureNeonClient() {
+    if (!usingNeon) return;
+    if (!neonClient) {
+        neonClient = createClient({ connectionString: DATABASE_URL });
+    }
+    if (neonReady) return;
+
+    await neonClient.query(`
+        CREATE TABLE IF NOT EXISTS records (
+            id SERIAL PRIMARY KEY,
+            type TEXT NOT NULL,
+            record_id TEXT UNIQUE,
+            data JSONB NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+    await neonClient.query(`CREATE INDEX IF NOT EXISTS idx_type ON records(type)`);
+    neonReady = true;
+}
+
+async function getAllRecords() {
+    if (!usingNeon) {
+        return ensureFallbackStore();
+    }
+    await ensureNeonClient();
+    const result = await neonClient.query('SELECT data FROM records ORDER BY id DESC');
+    return result.rows.map(row => (typeof row.data === 'string' ? JSON.parse(row.data) : row.data));
+}
+
+async function createOrUpdateRecord(record) {
+    const recordId = getRecordId(record) || `record_${Date.now()}`;
+    const type = record.type || 'unknown';
+
+    if (!usingNeon) {
+        const store = ensureFallbackStore();
+        const idx = store.findIndex(item => getRecordId(item) === recordId);
+        if (idx >= 0) {
+            store[idx] = record;
+        } else {
+            store.push(record);
+        }
+        return;
+    }
+
+    await ensureNeonClient();
+    await neonClient.query(
+        `INSERT INTO records (type, record_id, data) VALUES ($1, $2, $3)
+         ON CONFLICT (record_id) DO UPDATE SET data = EXCLUDED.data, type = EXCLUDED.type, updated_at = CURRENT_TIMESTAMP`,
+        [type, recordId, JSON.stringify(record)]
+    );
+}
+
+async function deleteRecord(recordId) {
+    if (!usingNeon) {
+        const store = ensureFallbackStore();
+        globalThis.__loanFallbackStore = store.filter(item => getRecordId(item) !== recordId);
+        return;
+    }
+
+    await ensureNeonClient();
+    await neonClient.query('DELETE FROM records WHERE record_id = $1', [recordId]);
 }
 
 module.exports = async (req, res) => {
@@ -39,11 +109,10 @@ module.exports = async (req, res) => {
         return;
     }
 
-    const store = ensureStore();
-
     try {
         if (req.method === 'GET') {
-            return res.status(200).json(store);
+            const records = await getAllRecords();
+            return res.status(200).json(records);
         }
 
         if (req.method === 'POST' || req.method === 'PUT') {
@@ -57,14 +126,7 @@ module.exports = async (req, res) => {
                 return res.status(400).json({ error: 'Missing unique record identifier' });
             }
 
-            if (req.method === 'POST') {
-                store.push(record);
-            } else {
-                const idx = store.findIndex(item => getRecordId(item) === id);
-                if (idx >= 0) store[idx] = record;
-                else store.push(record);
-            }
-
+            await createOrUpdateRecord(record);
             return res.status(200).json({ success: true });
         }
 
@@ -73,9 +135,7 @@ module.exports = async (req, res) => {
             if (!recordId) {
                 return res.status(400).json({ error: 'Missing record_id parameter' });
             }
-            const next = store.filter(item => getRecordId(item) !== recordId);
-            globalThis.__loanFallbackStore = next;
-            fallbackStore = next;
+            await deleteRecord(recordId);
             return res.status(200).json({ success: true });
         }
 

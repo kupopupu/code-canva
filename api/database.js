@@ -1,14 +1,60 @@
-const sqlite3 = require('sqlite3').verbose();
+require('dotenv').config();
 const path = require('path');
+const sqlite3 = require('sqlite3').verbose();
+const { createClient } = require('@neondatabase/serverless');
 
 const DB_PATH = path.join(__dirname, '../loan_data.db');
+const DATABASE_URL = process.env.DATABASE_URL;
+const usingNeon = Boolean(DATABASE_URL && DATABASE_URL.trim());
 let db;
+let neonClient;
+let neonReady = false;
+
+function getRecordId(record) {
+    return record && (record.loan_id || record.borrower_id || record.fund_id || record.id || null);
+}
+
+async function ensureNeonTable() {
+    if (!usingNeon) return;
+    if (neonReady) return;
+
+    neonClient = createClient({ connectionString: DATABASE_URL });
+    await neonClient.query(`
+        CREATE TABLE IF NOT EXISTS records (
+            id SERIAL PRIMARY KEY,
+            type TEXT NOT NULL,
+            record_id TEXT UNIQUE,
+            data JSONB NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+    await neonClient.query(`CREATE INDEX IF NOT EXISTS idx_type ON records(type)`);
+    neonReady = true;
+}
+
+function parseRows(rows) {
+    return rows.map(row => {
+        try {
+            return typeof row.data === 'string' ? JSON.parse(row.data) : row.data;
+        } catch (err) {
+            return row.data;
+        }
+    });
+}
 
 const database = {
     init() {
+        if (usingNeon) {
+            ensureNeonTable()
+                .then(() => console.log('✅ Kết nối Neon thành công'))
+                .catch(err => console.error('❌ Lỗi kết nối Neon:', err));
+            return;
+        }
+
         db = new sqlite3.Database(DB_PATH, (err) => {
             if (err) {
-                console.error('❌ Lỗi kết nối database:', err);
+                console.error('❌ Lỗi kết nối SQLite:', err);
                 return;
             }
             console.log('✅ Kết nối SQLite thành công:', DB_PATH);
@@ -18,7 +64,6 @@ const database = {
 
     createTables() {
         db.serialize(() => {
-            // Tạo bảng chính để lưu toàn bộ bản ghi dưới dạng JSON
             db.run(`
                 CREATE TABLE IF NOT EXISTS records (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -33,14 +78,25 @@ const database = {
                 else console.log('✅ Bảng records sẵn sàng');
             });
 
-            // Tạo index để truy vấn nhanh
             db.run(`CREATE INDEX IF NOT EXISTS idx_type ON records(type)`, (err) => {
                 if (err) console.error('❌ Lỗi tạo index:', err);
             });
         });
     },
 
-    getAllRecords(callback) {
+    async getAllRecords(callback) {
+        if (usingNeon) {
+            try {
+                await ensureNeonTable();
+                const result = await neonClient.query('SELECT data FROM records ORDER BY id DESC');
+                callback(null, parseRows(result.rows));
+            } catch (err) {
+                console.error('❌ Lỗi lấy dữ liệu Neon:', err);
+                callback(err, []);
+            }
+            return;
+        }
+
         db.all('SELECT data FROM records ORDER BY id DESC', [], (err, rows) => {
             if (err) {
                 console.error('❌ Lỗi lấy dữ liệu:', err);
@@ -57,11 +113,28 @@ const database = {
         });
     },
 
-    createRecord(record, callback) {
-        const recordId = record.loan_id || record.borrower_id || record.fund_id || `record_${Date.now()}`;
-        const data = JSON.stringify(record);
+    async createRecord(record, callback) {
+        const recordId = getRecordId(record) || `record_${Date.now()}`;
         const type = record.type || 'unknown';
 
+        if (usingNeon) {
+            try {
+                await ensureNeonTable();
+                await neonClient.query(
+                    `INSERT INTO records (type, record_id, data) VALUES ($1, $2, $3)
+                     ON CONFLICT (record_id) DO UPDATE SET data = EXCLUDED.data, type = EXCLUDED.type, updated_at = CURRENT_TIMESTAMP`,
+                    [type, recordId, JSON.stringify(record)]
+                );
+                console.log(`✅ Bản ghi mới tạo hoặc cập nhật trên Neon: ${recordId}`);
+                callback(null);
+            } catch (err) {
+                console.error('❌ Lỗi tạo bản ghi Neon:', err);
+                callback(err);
+            }
+            return;
+        }
+
+        const data = JSON.stringify(record);
         db.run(
             `INSERT INTO records (type, record_id, data) VALUES (?, ?, ?)`,
             [type, recordId, data],
@@ -76,13 +149,29 @@ const database = {
         );
     },
 
-    updateRecord(recordId, record, callback) {
-        const data = JSON.stringify(record);
+    async updateRecord(recordId, record, callback) {
         const type = record.type || 'unknown';
 
+        if (usingNeon) {
+            try {
+                await ensureNeonTable();
+                await neonClient.query(
+                    `INSERT INTO records (type, record_id, data) VALUES ($1, $2, $3)
+                     ON CONFLICT (record_id) DO UPDATE SET data = EXCLUDED.data, type = EXCLUDED.type, updated_at = CURRENT_TIMESTAMP`,
+                    [type, recordId, JSON.stringify(record)]
+                );
+                console.log(`✅ Bản ghi Neon cập nhật hoặc tạo mới: ${recordId}`);
+                callback(null);
+            } catch (err) {
+                console.error('❌ Lỗi cập nhật Neon:', err);
+                callback(err);
+            }
+            return;
+        }
+
+        const data = JSON.stringify(record);
         db.run(
-            `UPDATE records SET data = ?, type = ?, updated_at = CURRENT_TIMESTAMP 
-             WHERE record_id = ?`,
+            `UPDATE records SET data = ?, type = ?, updated_at = CURRENT_TIMESTAMP WHERE record_id = ?`,
             [data, type, recordId],
             function(err) {
                 if (err) {
@@ -90,7 +179,6 @@ const database = {
                     return callback(err);
                 }
                 if (this.changes === 0) {
-                    // Nếu không tìm thấy, thêm mới
                     console.log(`⚠️  Bản ghi không tìm thấy, tạo mới: ${recordId}`);
                     database.createRecord(record, callback);
                 } else {
