@@ -661,8 +661,18 @@ function openPaymentModal(dateStr, dayTotal) {
     const remainingForDay = currentLoan.daily_payment - dayTotal;
     document.getElementById('payment-date').value = dateStr;
     const amtInput = document.getElementById('payment-amount');
-    amtInput.value = new Intl.NumberFormat('en-US').format(remainingForDay);
+    amtInput.value = new Intl.NumberFormat('en-US').format(Math.max(0, remainingForDay));
     document.getElementById('payment-info').textContent = `Góp ngày: ${dateStr.split('-').reverse().join('/')} | Đã góp trong ngày: ${fmt(dayTotal)}`;
+    
+    const btnDelete = document.getElementById('btn-delete-payment');
+    if (btnDelete) {
+        if (dayTotal > 0) {
+            btnDelete.classList.remove('hidden');
+        } else {
+            btnDelete.classList.add('hidden');
+        }
+    }
+    
     document.getElementById('modal-payment').classList.add('show');
 }
 
@@ -671,18 +681,35 @@ async function handlePayment(e) {
     const amount = getNumericValue(document.getElementById('payment-amount').value);
     const targetDate = document.getElementById('payment-date').value;
     if (!amount || !currentLoan || !targetDate) return;
+    
     const payments = getPayments(currentLoan.loan_id);
     payments.push({ date: targetDate, amount, time: new Date().toISOString() });
     const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
     const totalRequired = currentLoan.principal * (1 + currentLoan.interest_rate / 100);
     const updatedLoan = { ...currentLoan, payments_json: JSON.stringify(payments), total_paid: totalPaid };
+    
     if (totalPaid >= totalRequired) {
         updatedLoan.status = 'completed';
         updatedLoan.completed_date = today();
     }
-    const result = await window.dataSdk.update(updatedLoan);
-    if (result.isOk) { closeModal('modal-payment'); showToast('Đã ghi nhận!'); }
-    else { showToast('Lỗi'); }
+    
+    // Cập nhật Optimistic UI (nhanh 1 cái bụp)
+    const idx = allData.findIndex(r => r.loan_id === updatedLoan.loan_id);
+    if (idx !== -1) allData[idx] = updatedLoan;
+    currentLoan = updatedLoan;
+    
+    closeModal('modal-payment');
+    showLoanDetail(updatedLoan.loan_id);
+    showToast('Đã ghi nhận!');
+
+    // Gửi request ngầm
+    window.dataSdk.update(updatedLoan).then(result => {
+        if (!result.isOk) { 
+            showToast('Lỗi mạng! Đang đồng bộ lại...');
+            // Có thể thêm logic rollback ở đây, nhưng reload là cách an toàn nhất
+            setTimeout(() => window.location.reload(), 1500);
+        }
+    });
 }
 
 // Show loan detail
@@ -711,6 +738,55 @@ function showLoanDetail(loanId) {
 
     renderPaymentGrid();
 }
+
+window.confirmDeleteLoan = function() {
+    if (!currentLoan) return;
+    if (!confirm('Bạn có chắc chắn muốn xóa hoàn toàn khoản vay này không?\nHành động này không thể hoàn tác!')) return;
+    
+    allData = allData.filter(r => r.loan_id !== currentLoan.loan_id);
+    
+    window.dataSdk.remove(currentLoan.loan_id).then(result => {
+        if (!result.isOk) {
+            showToast('Lỗi mạng, không thể xóa!');
+            setTimeout(() => window.location.reload(), 1500);
+        }
+    });
+    
+    goBack();
+    showToast('Đã xóa khoản vay!');
+};
+
+window.handleDeletePayment = function() {
+    const targetDate = document.getElementById('payment-date').value;
+    if (!currentLoan || !targetDate) return;
+    
+    if (!confirm(`Bạn có chắc chắn muốn xóa/hoàn tác tất cả giao dịch trong ngày ${targetDate.split('-').reverse().join('/')}?`)) return;
+    
+    const payments = getPayments(currentLoan.loan_id).filter(p => p.date !== targetDate);
+    const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
+    const totalRequired = currentLoan.principal * (1 + currentLoan.interest_rate / 100);
+    const updatedLoan = { ...currentLoan, payments_json: JSON.stringify(payments), total_paid: totalPaid };
+    
+    if (totalPaid < totalRequired) {
+        updatedLoan.status = 'active';
+        updatedLoan.completed_date = null;
+    }
+    
+    const idx = allData.findIndex(r => r.loan_id === updatedLoan.loan_id);
+    if (idx !== -1) allData[idx] = updatedLoan;
+    currentLoan = updatedLoan;
+    
+    closeModal('modal-payment');
+    showLoanDetail(updatedLoan.loan_id);
+    showToast('Đã xóa giao dịch!');
+
+    window.dataSdk.update(updatedLoan).then(result => {
+        if (!result.isOk) { 
+            showToast('Lỗi mạng! Đang đồng bộ lại...');
+            setTimeout(() => window.location.reload(), 1500);
+        }
+    });
+};
 
 function getLunarDate(d) {
     try {
@@ -755,11 +831,7 @@ function renderPaymentGrid() {
         const lunarStr = getLunarDate(d);
         cell.innerHTML = `<span>${dayMonth}</span><div class="lunar-date">${lunarStr}</div><div class="payment-subtext flex items-center justify-center opacity-80 mt-1">${subContent}</div>`;
         cell.title = `${dateStr}: ${fmt(dayTotal)}`;
-        if (dayTotal < currentLoan.daily_payment) {
-            cell.onclick = () => openPaymentModal(dateStr, dayTotal);
-        } else {
-            cell.onclick = () => showToast(`Ngày ${dateStr.split('-').reverse().join('/')} đã hoàn thành`);
-        }
+        cell.onclick = () => openPaymentModal(dateStr, dayTotal);
         grid.appendChild(cell);
     }
     lucide.createIcons();
@@ -771,6 +843,10 @@ function renderDashboard() {
     const totalLending = loans.reduce((s, l) => s + (l.principal || 0), 0);
     const totalDebt = loans.reduce((s, l) => s + ((l.principal * (1 + l.interest_rate / 100)) - (l.total_paid || 0)), 0);
     
+    const allLoans = getLoans();
+    const alltimeLending = allLoans.reduce((s, l) => s + (l.principal || 0), 0);
+    const alltimeCollected = allLoans.reduce((s, l) => s + (l.total_paid || 0), 0);
+    
     const fundBalances = getFundBalances();
     const quyChung = fundBalances.find(f => f.name.toLowerCase() === 'quỹ chung');
     const fundBalance = quyChung ? quyChung.amount : 0;
@@ -780,6 +856,11 @@ function renderDashboard() {
     document.getElementById('val-total-debt').textContent = fmt(Math.max(0, totalDebt));
     document.getElementById('val-fund-balance').textContent = fmt(fundBalance);
     document.getElementById('val-external-debt').textContent = fmt(externalDebt);
+    
+    const elAllLending = document.getElementById('val-total-alltime-lending');
+    if (elAllLending) elAllLending.textContent = fmt(alltimeLending);
+    const elAllCollected = document.getElementById('val-total-alltime-collected');
+    if (elAllCollected) elAllCollected.textContent = fmt(alltimeCollected);
 
     let expectedToday = 0;
     let collectedToday = 0;
@@ -839,9 +920,10 @@ function renderDashboard() {
                      style="margin-bottom:0">
                     <div>
                         <p class="font-semibold text-sm text-gray-800">${l.borrower_name}</p>
-                        <div class="flex flex-col items-start gap-1 mt-1.5">
-                            <span class="bg-gray-100 text-gray-500 text-[10px] px-1.5 py-0.5 rounded font-mono max-w-[120px] truncate" title="Mã KH">${l.borrower_id}</span>
-                            <span class="bg-blue-50 text-blue-500 text-[10px] px-1.5 py-0.5 rounded font-mono max-w-[120px] truncate" title="Mã vay">${l.loan_id}</span>
+                        <p class="text-[12px] font-medium text-gray-600 mt-0.5">Tổng vay: ${fmt(l.principal)}</p>
+                        <div class="flex flex-row flex-wrap items-center gap-1.5 mt-1.5">
+                            <span class="bg-gray-100 text-gray-500 text-[10px] px-1.5 py-0.5 rounded font-mono truncate" title="Mã KH">${l.borrower_id}</span>
+                            <span class="bg-blue-50 text-blue-500 text-[10px] px-1.5 py-0.5 rounded font-mono truncate" title="Mã vay">${l.loan_id}</span>
                         </div>
                     </div>
                     <div class="flex flex-col items-end text-right">
@@ -911,9 +993,9 @@ function renderLoans() {
         <div class="flex justify-between items-start w-full">
             <div>
                 <p class="font-semibold text-sm">${l.borrower_name}</p>
-                <div class="flex flex-col items-start gap-1 mt-1.5">
-                    <span class="bg-gray-100 text-gray-500 text-[10px] px-1.5 py-0.5 rounded font-mono max-w-[120px] truncate" title="Mã KH">${l.borrower_id}</span>
-                    <span class="bg-blue-50 text-blue-500 text-[10px] px-1.5 py-0.5 rounded font-mono max-w-[120px] truncate" title="Mã vay">${l.loan_id}</span>
+                <div class="flex flex-row flex-wrap items-center gap-1.5 mt-1.5">
+                    <span class="bg-gray-100 text-gray-500 text-[10px] px-1.5 py-0.5 rounded font-mono truncate" title="Mã KH">${l.borrower_id}</span>
+                    <span class="bg-blue-50 text-blue-500 text-[10px] px-1.5 py-0.5 rounded font-mono truncate" title="Mã vay">${l.loan_id}</span>
                 </div>
             </div>
             <div class="text-right flex flex-col items-end">
