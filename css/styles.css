@@ -236,3 +236,19 @@
             background: linear-gradient(90deg, var(--blue-400), var(--blue-600));
             transition: width 0.3s;
         }
+
+        /* Icon sizes */
+        .icon-xl {
+            width: 20px;
+            height: 20px;
+        }
+
+        .icon-lg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .icon-md {
+            width: 16px;
+            height: 16px;
+        }

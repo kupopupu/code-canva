@@ -79,7 +79,7 @@ function addFundRow() {
         <input type="text" autocomplete="off" class="input-field w-full fund-select" placeholder="Tên nguồn" required onfocus="showFundDropdown(this)" oninput="filterFundDropdown(this)" onblur="hideFundDropdown(this)">
         <div class="fund-dropdown hidden absolute z-[100] w-full bg-white border border-gray-200 rounded-xl shadow-xl max-h-40 overflow-y-auto mt-1 top-full left-0"></div>
     </div>
-    <input type="text" inputmode="numeric" pattern="[0-9]*" class="input-field w-1/3 fund-amount" placeholder="Số tiền" required oninput="formatCurrency(this)">
+    <input type="text" inputmode="numeric" class="input-field w-1/3 fund-amount" placeholder="Số tiền" required oninput="formatCurrency(this)">
     <button type="button" onclick="this.parentElement.remove()" class="p-2 bg-red-100 text-red-600 rounded-lg flex-shrink-0"><i data-lucide="minus" style="width:18px;height:18px"></i></button>
 `;
     container.appendChild(row);
@@ -96,7 +96,7 @@ function showCreateLoanModal() {
             <input type="text" autocomplete="off" class="input-field w-full fund-select" value="Quỹ chung" placeholder="Tên nguồn" required onfocus="showFundDropdown(this)" oninput="filterFundDropdown(this)" onblur="hideFundDropdown(this)">
             <div class="fund-dropdown hidden absolute z-[100] w-full bg-white border border-gray-200 rounded-xl shadow-xl max-h-40 overflow-y-auto mt-1 top-full left-0"></div>
         </div>
-        <input type="text" inputmode="numeric" pattern="[0-9]*" class="input-field w-1/3 fund-amount" placeholder="Số tiền" required oninput="formatCurrency(this)">
+        <input type="text" inputmode="numeric" class="input-field w-1/3 fund-amount" placeholder="Số tiền" required oninput="formatCurrency(this)">
         <button type="button" onclick="addFundRow()" class="p-2 bg-blue-100 text-blue-600 rounded-lg flex-shrink-0"><i data-lucide="plus" style="width:18px;height:18px"></i></button>
     </div>
 `;
@@ -224,6 +224,14 @@ document.getElementById('loan-start-date').addEventListener('change', calculateL
 async function handleCreateLoan(e) {
     e.preventDefault();
     if (allData.length >= 999) { showToast('Đã đạt giới hạn dữ liệu'); return; }
+    
+    // Validate that computed fields are populated
+    const endDate = document.getElementById('loan-end-date').value;
+    if (!endDate) {
+        showToast('Vui lòng điền đầy đủ thông tin: Số ngày góp gốc và Số ngày lãi phải > 0');
+        return;
+    }
+    
     const btn = document.getElementById('btn-submit-loan');
     btn.disabled = true; btn.textContent = 'Đang tạo...';
 
@@ -440,6 +448,14 @@ document.getElementById('edit-loan-start-date').addEventListener('change', calcu
 
 async function handleEditLoan(e) {
     e.preventDefault();
+    
+    // Validate that computed fields are populated
+    const endDate = document.getElementById('edit-loan-end-date').value;
+    if (!endDate) {
+        showToast('Vui lòng điền đầy đủ thông tin: Số ngày góp gốc và Số ngày lãi phải > 0');
+        return;
+    }
+    
     const btn = document.getElementById('btn-submit-edit-loan');
     btn.disabled = true; btn.textContent = 'Đang lưu...';
 
