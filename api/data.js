@@ -1,7 +1,7 @@
 require('dotenv').config();
 const { neon } = require('@neondatabase/serverless');
 
-const DATABASE_URL = process.env.DATABASE_URL;
+const DATABASE_URL = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL || process.env.POSTGRES_URL || process.env.PG_CONNECTION_STRING;
 const usingNeon = Boolean(DATABASE_URL && DATABASE_URL.trim());
 let neonClient;
 let neonReady = false;
@@ -39,7 +39,7 @@ async function ensureNeonClient() {
     if (neonReady) return;
 
     await neonClient`
-        CREATE TABLE IF NOT EXISTS records (
+        CREATE TABLE IF NOT EXISTS app_records (
             id SERIAL PRIMARY KEY,
             type TEXT NOT NULL,
             record_id TEXT UNIQUE,
@@ -48,7 +48,7 @@ async function ensureNeonClient() {
             updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
         )
     `;
-    await neonClient`CREATE INDEX IF NOT EXISTS idx_type ON records(type)`;
+    await neonClient`CREATE INDEX IF NOT EXISTS idx_app_records_type ON app_records(type)`;
     neonReady = true;
 }
 
@@ -57,7 +57,7 @@ async function getAllRecords() {
         return ensureFallbackStore();
     }
     await ensureNeonClient();
-    const result = await neonClient`SELECT data FROM records ORDER BY id DESC`;
+    const result = await neonClient`SELECT data FROM app_records ORDER BY id DESC`;
     return result.map(row => (typeof row.data === 'string' ? JSON.parse(row.data) : row.data));
 }
 
@@ -78,7 +78,7 @@ async function createOrUpdateRecord(record) {
 
     await ensureNeonClient();
     await neonClient`
-        INSERT INTO records (type, record_id, data) VALUES (${type}, ${recordId}, ${JSON.stringify(record)})
+        INSERT INTO app_records (type, record_id, data) VALUES (${type}, ${recordId}, ${JSON.stringify(record)})
         ON CONFLICT (record_id) DO UPDATE SET data = EXCLUDED.data, type = EXCLUDED.type, updated_at = CURRENT_TIMESTAMP
     `;
 }
@@ -91,7 +91,7 @@ async function deleteRecord(recordId) {
     }
 
     await ensureNeonClient();
-    await neonClient`DELETE FROM records WHERE record_id = ${recordId}`;
+    await neonClient`DELETE FROM app_records WHERE record_id = ${recordId}`;
 }
 
 module.exports = async (req, res) => {
@@ -110,7 +110,17 @@ module.exports = async (req, res) => {
 
     try {
         if (req.method === 'GET') {
+            const debugMode = req.query.debug === '1' || req.query.debug === 'true';
             const records = await getAllRecords();
+            console.log('API GET /api/data', { usingNeon, hasDatabaseUrl: Boolean(DATABASE_URL), recordCount: records.length });
+            if (debugMode) {
+                return res.status(200).json({
+                    usingNeon,
+                    hasDatabaseUrl: Boolean(DATABASE_URL),
+                    recordCount: records.length,
+                    sample: records.slice(0, 20)
+                });
+            }
             return res.status(200).json(records);
         }
 

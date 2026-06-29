@@ -20,7 +20,7 @@ async function ensureNeonTable() {
 
     neonClient = neon(DATABASE_URL);
     await neonClient`
-        CREATE TABLE IF NOT EXISTS records (
+        CREATE TABLE IF NOT EXISTS app_records (
             id SERIAL PRIMARY KEY,
             type TEXT NOT NULL,
             record_id TEXT UNIQUE,
@@ -29,7 +29,7 @@ async function ensureNeonTable() {
             updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
         )
     `;
-    await neonClient`CREATE INDEX IF NOT EXISTS idx_type ON records(type)`;
+    await neonClient`CREATE INDEX IF NOT EXISTS idx_app_records_type ON app_records(type)`;
     neonReady = true;
 }
 
@@ -65,7 +65,7 @@ const database = {
     createTables() {
         db.serialize(() => {
             db.run(`
-                CREATE TABLE IF NOT EXISTS records (
+                CREATE TABLE IF NOT EXISTS app_records (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     type TEXT NOT NULL,
                     record_id TEXT UNIQUE,
@@ -74,11 +74,11 @@ const database = {
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
             `, (err) => {
-                if (err) console.error('❌ Lỗi tạo bảng records:', err);
-                else console.log('✅ Bảng records sẵn sàng');
+                if (err) console.error('❌ Lỗi tạo bảng app_records:', err);
+                else console.log('✅ Bảng app_records sẵn sàng');
             });
 
-            db.run(`CREATE INDEX IF NOT EXISTS idx_type ON records(type)`, (err) => {
+            db.run(`CREATE INDEX IF NOT EXISTS idx_app_records_type ON app_records(type)`, (err) => {
                 if (err) console.error('❌ Lỗi tạo index:', err);
             });
         });
@@ -88,7 +88,7 @@ const database = {
         if (usingNeon) {
             try {
                 await ensureNeonTable();
-                const rows = await neonClient`SELECT data FROM records ORDER BY id DESC`;
+                const rows = await neonClient`SELECT data FROM app_records ORDER BY id DESC`;
                 callback(null, parseRows(rows));
             } catch (err) {
                 console.error('❌ Lỗi lấy dữ liệu Neon:', err);
@@ -97,7 +97,7 @@ const database = {
             return;
         }
 
-        db.all('SELECT data FROM records ORDER BY id DESC', [], (err, rows) => {
+        db.all('SELECT data FROM app_records ORDER BY id DESC', [], (err, rows) => {
             if (err) {
                 console.error('❌ Lỗi lấy dữ liệu:', err);
                 return callback(err, []);
@@ -121,7 +121,7 @@ const database = {
             try {
                 await ensureNeonTable();
                 await neonClient`
-                    INSERT INTO records (type, record_id, data) VALUES (${type}, ${recordId}, ${JSON.stringify(record)})
+                    INSERT INTO app_records (type, record_id, data) VALUES (${type}, ${recordId}, ${JSON.stringify(record)})
                     ON CONFLICT (record_id) DO UPDATE SET data = EXCLUDED.data, type = EXCLUDED.type, updated_at = CURRENT_TIMESTAMP
                 `;
                 console.log(`✅ Bản ghi mới tạo hoặc cập nhật trên Neon: ${recordId}`);
@@ -135,7 +135,7 @@ const database = {
 
         const data = JSON.stringify(record);
         db.run(
-            `INSERT INTO records (type, record_id, data) VALUES (?, ?, ?)`,
+            `INSERT INTO app_records (type, record_id, data) VALUES (?, ?, ?)`,
             [type, recordId, data],
             (err) => {
                 if (err) {
@@ -155,7 +155,7 @@ const database = {
             try {
                 await ensureNeonTable();
                 await neonClient`
-                    INSERT INTO records (type, record_id, data) VALUES (${type}, ${recordId}, ${JSON.stringify(record)})
+                    INSERT INTO app_records (type, record_id, data) VALUES (${type}, ${recordId}, ${JSON.stringify(record)})
                     ON CONFLICT (record_id) DO UPDATE SET data = EXCLUDED.data, type = EXCLUDED.type, updated_at = CURRENT_TIMESTAMP
                 `;
                 console.log(`✅ Bản ghi Neon cập nhật hoặc tạo mới: ${recordId}`);
@@ -169,7 +169,7 @@ const database = {
 
         const data = JSON.stringify(record);
         db.run(
-            `UPDATE records SET data = ?, type = ?, updated_at = CURRENT_TIMESTAMP WHERE record_id = ?`,
+            `UPDATE app_records SET data = ?, type = ?, updated_at = CURRENT_TIMESTAMP WHERE record_id = ?`,
             [data, type, recordId],
             function(err) {
                 if (err) {

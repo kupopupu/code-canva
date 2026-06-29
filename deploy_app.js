@@ -1242,7 +1242,6 @@ if (!window.dataSdk) {
                     this.data = ensureLocalFund(await res.json());
                     writeLocalStore(this.data);
                     if (this.handler) this.handler.onDataChanged(this.data);
-                    hideLoading();
                     return;
                 }
             } catch (e) {
@@ -1266,7 +1265,6 @@ if (!window.dataSdk) {
                 });
                 if (res.ok) {
                     await this.fetchAll();
-                    hideLoading();
                     return { isOk: true };
                 }
             } catch (e) {
@@ -1290,7 +1288,6 @@ if (!window.dataSdk) {
                 });
                 if (res.ok) {
                     await this.fetchAll();
-                    hideLoading();
                     return { isOk: true };
                 }
             } catch (e) {
@@ -1314,7 +1311,6 @@ if (!window.dataSdk) {
                 await this.fetchAll();
             } catch (e) {
                 console.warn('Init fetch failed:', e);
-                hideLoading();
             }
             return { isOk: true };
         }
@@ -1368,4 +1364,5 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('login-screen').classList.add('flex');
     }
 });
+
 
