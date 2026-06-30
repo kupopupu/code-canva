@@ -131,6 +131,11 @@
             color: var(--gray-400);
         }
 
+        .payment-today {
+            background: #fef08a;
+            color: #854d0e;
+        }
+
         .payment-overdue {
             background: #fecaca;
             color: #991b1b;

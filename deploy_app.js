@@ -740,6 +740,7 @@ function renderPaymentGrid() {
         if (dayTotal >= currentLoan.daily_payment) cls = 'payment-paid';
         else if (dayTotal > 0) cls = 'payment-partial';
         else if (dateStr < todayDate) cls = 'payment-overdue';
+        else if (dateStr === todayDate) cls = 'payment-today';
 
         const cell = document.createElement('div');
         cell.className = `payment-cell ${cls}`;
