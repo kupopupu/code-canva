@@ -1226,8 +1226,8 @@ if (!window.dataSdk) {
 
     const getApiUrl = (path) => {
         const port = window.location.port;
-        if (port && port !== '3000' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-            return `http://localhost:3000${path}`;
+        if (port && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+            return `http://localhost:3001${path}`;
         }
         return path;
     };
