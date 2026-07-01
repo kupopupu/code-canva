@@ -144,10 +144,27 @@ function showCreateLoanModal() {
 function showAddFundModal() { document.getElementById('modal-add-fund').classList.add('show'); }
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 
+function updateAmountToGive() {
+    const loanType = document.querySelector('[name="loan-type"]:checked').value;
+    const principal = getNumericValue(document.getElementById('loan-principal').value) || 0;
+    let oldDebt = 0;
+    if (loanType === 'renewal') {
+        const prevId = document.getElementById('prev-loan-select').value;
+        const prev = allData.find(r => r.loan_id === prevId);
+        if (prev) {
+            const totalRequired = prev.principal * (1 + prev.interest_rate / 100);
+            oldDebt = Math.round(totalRequired - (prev.total_paid || 0));
+        }
+    }
+    const giveAmount = Math.max(0, principal - oldDebt);
+    document.getElementById('amount-to-give-display').textContent = fmt(giveAmount);
+}
+
 // Renewal toggle
 document.querySelectorAll('[name="loan-type"]').forEach(r => {
     r.addEventListener('change', e => {
         document.getElementById('renewal-section').classList.toggle('hidden', e.target.value !== 'renewal');
+        updateAmountToGive();
     });
 });
 
@@ -155,10 +172,12 @@ document.getElementById('prev-loan-select').addEventListener('change', e => {
     const loan = allData.find(r => r.loan_id === e.target.value);
     const info = document.getElementById('old-debt-info');
     if (loan) {
-        const remaining = (loan.principal || 0) - (loan.total_paid || 0);
+        const totalRequired = loan.principal * (1 + loan.interest_rate / 100);
+        const remaining = Math.round(totalRequired - (loan.total_paid || 0));
         info.textContent = `Nợ cũ còn: ${fmt(remaining)} - sẽ được khấu trừ`;
         info.classList.remove('hidden');
     } else { info.classList.add('hidden'); }
+    updateAmountToGive();
 });
 
 let availableFunds = [];
@@ -231,6 +250,7 @@ function calculateLoanInfo() {
         document.getElementById('loan-daily').value = '';
         document.getElementById('loan-end-date').value = '';
     }
+    updateAmountToGive();
 }
 
 document.getElementById('loan-principal').addEventListener('input', function () {
@@ -300,7 +320,10 @@ async function handleCreateLoan(e) {
     if (loanType === 'renewal') {
         prevId = document.getElementById('prev-loan-select').value;
         const prev = allData.find(r => r.loan_id === prevId);
-        if (prev) oldDebt = (prev.principal || 0) - (prev.total_paid || 0);
+        if (prev) {
+            const totalRequired = prev.principal * (1 + prev.interest_rate / 100);
+            oldDebt = Math.round(totalRequired - (prev.total_paid || 0));
+        }
     }
 
     const requiredFundAmount = principal - oldDebt;
@@ -753,6 +776,10 @@ window.confirmDeleteLoan = function() {
     });
     
     goBack();
+    renderDashboard();
+    renderLoans();
+    renderFunds();
+    renderStats();
     showToast('Đã xóa khoản vay!');
 };
 

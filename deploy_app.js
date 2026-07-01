@@ -13,7 +13,7 @@ function generateBorrowerId(name) {
     const loans = getLoans();
     const existing = loans.find(l => l.borrower_name && l.borrower_name.trim().toLowerCase() === name.trim().toLowerCase());
     if (existing && existing.borrower_id) return existing.borrower_id;
-    
+
     let max = 0;
     loans.forEach(l => {
         if (l.borrower_id && l.borrower_id.startsWith('KH')) {
@@ -77,13 +77,13 @@ function updateFundBalancesLabels() {
         const selectEl = row.querySelector('.fund-select');
         const labelEl = row.querySelector('.fund-balance-label');
         if (!selectEl || !labelEl) return;
-        
+
         const fundName = selectEl.value.trim().toLowerCase();
         if (!fundName) {
             labelEl.textContent = 'Còn: 0đ';
             return;
         }
-        
+
         const fund = balances.find(f => f.name.toLowerCase() === fundName);
         const amount = fund ? fund.amount : 0;
         labelEl.textContent = `Còn: ${fmt(amount)}`;
@@ -239,7 +239,7 @@ document.getElementById('loan-principal').addEventListener('input', function () 
 });
 document.getElementById('loan-duration').addEventListener('input', calculateLoanInfo);
 document.getElementById('loan-interest-days').addEventListener('input', calculateLoanInfo);
-document.getElementById('loan-give-date').addEventListener('change', function() {
+document.getElementById('loan-give-date').addEventListener('change', function () {
     if (this.value) {
         const d = new Date(this.value);
         d.setDate(d.getDate() + 1);
@@ -253,14 +253,14 @@ document.getElementById('loan-start-date').addEventListener('change', calculateL
 async function handleCreateLoan(e) {
     e.preventDefault();
     if (allData.length >= 999) { showToast('Đã đạt giới hạn dữ liệu'); return; }
-    
+
     // Validate that computed fields are populated
     const endDate = document.getElementById('loan-end-date').value;
     if (!endDate) {
         showToast('Vui lòng điền đầy đủ thông tin: Số ngày góp gốc và Số ngày lãi phải > 0');
         return;
     }
-    
+
     const btn = document.getElementById('btn-submit-loan');
     btn.disabled = true; btn.textContent = 'Đang tạo...';
 
@@ -387,18 +387,18 @@ function showBorrowerSuggestions(input, type = 'create') {
     const val = input.value.toLowerCase();
     const dropdown = type === 'create' ? document.getElementById('borrower-suggestions') : document.getElementById('edit-borrower-suggestions');
     if (!dropdown) return;
-    
+
     const borrowers = getUniqueBorrowers();
     let filtered = borrowers;
     if (val) {
         filtered = borrowers.filter(b => b.toLowerCase().includes(val));
     }
-    
+
     if (filtered.length === 0) {
         dropdown.classList.add('hidden');
         return;
     }
-    
+
     dropdown.innerHTML = filtered.map(b => `
         <div class="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm text-gray-700 transition-colors" 
              onmousedown="event.preventDefault(); document.getElementById('${input.id}').value = '${b}'; document.getElementById('${dropdown.id}').classList.add('hidden');">
@@ -420,7 +420,7 @@ function openEditLoanModal() {
     if (!currentLoan) return;
     document.getElementById('edit-loan-id').value = currentLoan.loan_id;
     document.getElementById('edit-loan-borrower').value = currentLoan.borrower_name;
-    
+
     const duration = Math.round(currentLoan.principal / currentLoan.daily_payment) || 0;
     const totalRequired = currentLoan.principal * (1 + currentLoan.interest_rate / 100);
     const interestAmt = totalRequired - currentLoan.principal;
@@ -438,7 +438,7 @@ function openEditLoanModal() {
     document.getElementById('edit-loan-principal').value = new Intl.NumberFormat('en-US').format(currentLoan.principal);
     document.getElementById('edit-loan-duration').value = duration;
     document.getElementById('edit-loan-interest-days').value = interestDays;
-    
+
     calculateEditLoanInfo();
     document.getElementById('modal-edit-loan').classList.add('show');
 }
@@ -465,7 +465,7 @@ function calculateEditLoanInfo() {
     }
 }
 
-document.getElementById('edit-loan-give-date').addEventListener('change', function() {
+document.getElementById('edit-loan-give-date').addEventListener('change', function () {
     if (this.value) {
         const d = new Date(this.value);
         d.setDate(d.getDate() + 1);
@@ -477,14 +477,14 @@ document.getElementById('edit-loan-start-date').addEventListener('change', calcu
 
 async function handleEditLoan(e) {
     e.preventDefault();
-    
+
     // Validate that computed fields are populated
     const endDate = document.getElementById('edit-loan-end-date').value;
     if (!endDate) {
         showToast('Vui lòng điền đầy đủ thông tin: Số ngày góp gốc và Số ngày lãi phải > 0');
         return;
     }
-    
+
     const btn = document.getElementById('btn-submit-edit-loan');
     btn.disabled = true; btn.textContent = 'Đang lưu...';
 
@@ -522,8 +522,8 @@ async function handleEditLoan(e) {
         showToast('Đã cập nhật khoản vay!');
         currentLoan = updatedLoan;
         showLoanDetail(currentLoan.loan_id);
-    } else { 
-        showToast('Lỗi: ' + (result.error?.message || 'Không xác định')); 
+    } else {
+        showToast('Lỗi: ' + (result.error?.message || 'Không xác định'));
     }
 }
 
@@ -533,9 +533,9 @@ async function handleAddFund(e) {
     if (allData.length >= 999) { showToast('Đã đạt giới hạn'); return; }
     const nameInput = document.getElementById('fund-name').value.trim();
     const amountInput = Number(document.getElementById('fund-amount').value);
-    
+
     const existing = allData.find(r => r.type === 'fund' && r.fund_name.toLowerCase() === nameInput.toLowerCase());
-    
+
     let record;
     if (existing) {
         record = {
@@ -574,7 +574,7 @@ async function handleAddMoney(e) {
     if (amount <= 0) return;
 
     const existing = allData.find(r => r.type === 'fund' && r.fund_name.toLowerCase() === name.toLowerCase());
-    
+
     let record;
     if (existing) {
         record = {
@@ -608,13 +608,13 @@ function openPayDebtModal(name, maxAmount) {
     const fundBalances = getFundBalances();
     const quyChung = fundBalances.find(f => f.name.toLowerCase() === 'quỹ chung');
     const qcAmount = quyChung ? quyChung.amount : 0;
-    
+
     document.getElementById('debt-target-name').value = name;
     document.getElementById('debt-max-amount').value = maxAmount;
     document.getElementById('debt-target-label').textContent = name + ` (Nợ: ${fmt(maxAmount)})`;
     document.getElementById('debt-quy-chung-label').textContent = fmt(qcAmount);
     document.getElementById('debt-pay-amount').value = '';
-    
+
     document.getElementById('modal-pay-debt').classList.add('show');
 }
 
@@ -623,7 +623,7 @@ async function handlePayDebt(e) {
     const name = document.getElementById('debt-target-name').value;
     const maxAmount = Number(document.getElementById('debt-max-amount').value);
     const payAmount = getNumericValue(document.getElementById('debt-pay-amount').value);
-    
+
     const fundBalances = getFundBalances();
     const quyChung = fundBalances.find(f => f.name.toLowerCase() === 'quỹ chung');
     const qcAmount = quyChung ? quyChung.amount : 0;
@@ -771,7 +771,7 @@ function renderDashboard() {
     const loans = getLoans().filter(l => l.status === 'active');
     const totalLending = loans.reduce((s, l) => s + (l.principal || 0), 0);
     const totalDebt = loans.reduce((s, l) => s + ((l.principal * (1 + l.interest_rate / 100)) - (l.total_paid || 0)), 0);
-    
+
     const fundBalances = getFundBalances();
     const quyChung = fundBalances.find(f => f.name.toLowerCase() === 'quỹ chung');
     const fundBalance = quyChung ? quyChung.amount : 0;
@@ -894,7 +894,7 @@ function renderLoans() {
     list.innerHTML = loans.map(l => {
         const totalRequired = l.principal * (1 + l.interest_rate / 100);
         const pct = Math.min(100, Math.round(((l.total_paid || 0) / totalRequired) * 100));
-        
+
         const totalDays = l.daily_payment > 0 ? Math.round(totalRequired / l.daily_payment) : 0;
         const completedDays = l.daily_payment > 0 ? Math.floor((l.total_paid || 0) / l.daily_payment) : 0;
         const start = new Date(l.first_payment_date);
@@ -1068,7 +1068,7 @@ document.addEventListener('touchstart', (e) => {
     if (document.getElementById('view-detail').classList.contains('active')) {
         edgeSwipeStartX = e.touches[0].clientX;
     }
-}, {passive: true});
+}, { passive: true });
 
 document.addEventListener('touchend', (e) => {
     if (document.getElementById('view-detail').classList.contains('active')) {
@@ -1077,7 +1077,7 @@ document.addEventListener('touchend', (e) => {
             goBack();
         }
     }
-}, {passive: true});
+}, { passive: true });
 
 async function quickPayToday(loanId, amount) {
     if (!confirm('Xác nhận đã thu đủ ' + fmt(amount) + '?')) {
@@ -1091,15 +1091,15 @@ async function quickPayToday(loanId, amount) {
     const payments = JSON.parse(currentLoanLocal.payments_json || '[]');
     const start = new Date(currentLoanLocal.first_payment_date);
     const tObj = new Date(tDate);
-    
+
     let remainingAmountToDistribute = amount;
-    
+
     for (let d = new Date(start); d <= tObj && remainingAmountToDistribute > 0; d.setDate(d.getDate() + 1)) {
         const dateStr = d.toISOString().slice(0, 10);
         const dayPayments = payments.filter(p => p.date === dateStr);
         const dayTotal = dayPayments.reduce((s, p) => s + p.amount, 0);
         const missingForDay = currentLoanLocal.daily_payment - dayTotal;
-        
+
         if (missingForDay > 0) {
             const payAmt = Math.min(missingForDay, remainingAmountToDistribute);
             payments.push({ date: dateStr, amount: payAmt, time: new Date().toISOString() });
@@ -1336,7 +1336,7 @@ const dataHandler = {
 
 const ALLOWED_PHONES = ['0966767731', '0335030381'];
 
-window.handleLogin = function() {
+window.handleLogin = function () {
     const phone = document.getElementById('login-phone').value.trim();
     if (ALLOWED_PHONES.includes(phone)) {
         localStorage.setItem('auth_phone', phone);
