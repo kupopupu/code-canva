@@ -1415,6 +1415,28 @@ if (!window.dataSdk) {
             hideLoading();
             return { isOk: true };
         },
+        async remove(id) {
+            showLoading();
+            try {
+                const res = await fetch(getApiUrl(`/api/data?id=${id}`), {
+                    method: 'DELETE'
+                });
+                if (res.ok) {
+                    await this.fetchAll();
+                    hideLoading();
+                    return { isOk: true };
+                }
+            } catch (e) {
+                console.warn('Delete API failed, saving locally:', e);
+            }
+
+            this.data = ensureLocalFund(readLocalStore());
+            this.data = this.data.filter(r => (r.loan_id || r.fund_id || r.borrower_id || r.id) !== id);
+            writeLocalStore(this.data);
+            if (this.handler) this.handler.onDataChanged(this.data);
+            hideLoading();
+            return { isOk: true };
+        },
         async init(handler) {
             this.handler = handler;
             this.data = ensureLocalFund(readLocalStore());
