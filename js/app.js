@@ -243,7 +243,7 @@ function calculateLoanInfo() {
         if (startDateVal) {
             const start = new Date(startDateVal);
             const totalDays = duration + interestDays;
-            start.setDate(start.getDate() + totalDays);
+            start.setDate(start.getDate() + totalDays - 1);
             document.getElementById('loan-end-date').value = start.toISOString().slice(0, 10);
         }
     } else {
@@ -373,12 +373,16 @@ async function handleCreateLoan(e) {
                 const prevPayments = JSON.parse(prev.payments_json || '[]');
                 const pStart = new Date(prev.first_payment_date);
                 const pEnd = new Date(prev.end_date);
-                for (let d = new Date(pStart); d <= pEnd; d.setDate(d.getDate() + 1)) {
+                let currentPaid = prevPayments.reduce((s, p) => s + p.amount, 0);
+                const totalReq = prev.principal * (1 + prev.interest_rate / 100);
+                for (let d = new Date(pStart); d <= pEnd && currentPaid < totalReq; d.setDate(d.getDate() + 1)) {
                     const dateStr = d.toISOString().slice(0, 10);
                     const dayPayments = prevPayments.filter(p => p.date === dateStr);
                     const dayTotal = dayPayments.reduce((s, p) => s + p.amount, 0);
                     if (dayTotal < prev.daily_payment) {
-                        prevPayments.push({ date: dateStr, amount: prev.daily_payment - dayTotal, time: new Date().toISOString() });
+                        const amountToAdd = Math.min(prev.daily_payment - dayTotal, totalReq - currentPaid);
+                        prevPayments.push({ date: dateStr, amount: amountToAdd, time: new Date().toISOString() });
+                        currentPaid += amountToAdd;
                     }
                 }
                 prev.payments_json = JSON.stringify(prevPayments);
@@ -479,7 +483,7 @@ function calculateEditLoanInfo() {
         if (startDateVal) {
             const start = new Date(startDateVal);
             const totalDays = duration + interestDays;
-            start.setDate(start.getDate() + totalDays);
+            start.setDate(start.getDate() + totalDays - 1);
             document.getElementById('edit-loan-end-date').value = start.toISOString().slice(0, 10);
         }
     } else {
@@ -760,6 +764,58 @@ function showLoanDetail(loanId) {
     document.getElementById('detail-status').className = 'tag ' + (currentLoan.status === 'active' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700');
 
     renderPaymentGrid();
+    renderTransactionHistory();
+}
+
+function renderTransactionHistory() {
+    const container = document.getElementById('transaction-history-list');
+    if (!container) return;
+    if (!currentLoan) { container.innerHTML = ''; return; }
+
+    const payments = getPayments(currentLoan.loan_id);
+    let historyHtml = '';
+    
+    const start = new Date(currentLoan.first_payment_date);
+    const todayObj = new Date(today());
+    let endDateToCheck = new Date(currentLoan.end_date);
+    if (currentLoan.status === 'completed' && currentLoan.completed_date) {
+        endDateToCheck = new Date(currentLoan.completed_date);
+    } else if (todayObj < endDateToCheck) {
+        endDateToCheck = todayObj;
+    }
+
+    let paidDays = 0;
+    let debtDays = 0;
+    
+    for (let d = new Date(start); d <= endDateToCheck; d.setDate(d.getDate() + 1)) {
+        const dateStr = d.toISOString().slice(0, 10);
+        const dayPayments = payments.filter(p => p.date === dateStr);
+        const dayTotal = dayPayments.reduce((s, p) => s + p.amount, 0);
+        if (dayTotal >= currentLoan.daily_payment) paidDays++;
+        else debtDays++;
+    }
+
+    historyHtml += `<div class="p-3 bg-gray-50 rounded-lg mb-2">
+        <p class="text-gray-700 font-medium mb-1">Tổng kết quá trình:</p>
+        <ul class="list-disc pl-4 text-gray-600">
+            <li>Đã xác nhận đóng: <span class="font-bold text-green-600">${paidDays} ngày</span></li>
+            <li>Nợ lại: <span class="font-bold text-red-500">${debtDays} ngày</span></li>
+        </ul>
+    </div>`;
+
+    const renewalLoan = allData.find(r => r.previous_loan_id === currentLoan.loan_id);
+    if (renewalLoan) {
+        const debtDeducted = renewalLoan.old_debt_deducted || 0;
+        const dedDays = currentLoan.daily_payment > 0 ? Math.round(debtDeducted / currentLoan.daily_payment) : 0;
+        historyHtml += `<div class="p-3 bg-blue-50 border border-blue-100 rounded-lg">
+            <p class="text-blue-800 font-medium">Đã tất toán bằng cách vay vòng mới!</p>
+            <p class="text-blue-600 mt-1">Ngày lên hồ sơ mới: <strong>${renewalLoan.start_date.split('-').reverse().join('/')}</strong></p>
+            <p class="text-blue-600">Số tiền khấu trừ: <strong>${fmt(debtDeducted)}</strong> (Tương đương nợ <strong>${dedDays} ngày</strong>)</p>
+            <button onclick="showLoanDetail('${renewalLoan.loan_id}')" class="mt-2 text-xs bg-blue-600 text-white px-3 py-1.5 rounded shadow-sm hover:bg-blue-700">Xem vòng mới này</button>
+        </div>`;
+    }
+
+    container.innerHTML = historyHtml;
 }
 
 window.confirmDeleteLoan = function() {
@@ -857,7 +913,9 @@ function renderPaymentGrid() {
         }
         const dayMonth = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
         const lunarStr = getLunarDate(d);
-        cell.innerHTML = `<span>${dayMonth}</span><div class="lunar-date">${lunarStr}</div><div class="payment-subtext flex items-center justify-center opacity-80 mt-1">${subContent}</div>`;
+        const daysOfWeek = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+        const dayOfWeekStr = daysOfWeek[d.getDay()];
+        cell.innerHTML = `<span>${dayMonth}</span><div class="lunar-date">${lunarStr}</div><div class="lunar-date">${dayOfWeekStr}</div><div class="payment-subtext flex items-center justify-center opacity-80 mt-1">${subContent}</div>`;
         cell.title = `${dateStr}: ${fmt(dayTotal)}`;
         cell.onclick = () => openPaymentModal(dateStr, dayTotal);
         grid.appendChild(cell);
@@ -1052,8 +1110,10 @@ function getFundBalances() {
     if (!balances['quỹ chung']) balances['quỹ chung'] = { name: 'Quỹ chung', amount: 0 };
 
     let totalCollected = 0;
+    let totalOldDebtDeducted = 0;
     loans.forEach(l => {
         totalCollected += (l.total_paid || 0);
+        totalOldDebtDeducted += (l.old_debt_deducted || 0);
         if (l.source_allocations) {
             l.source_allocations.split(' | ').forEach(p => {
                 const parts = p.split(': ');
@@ -1068,7 +1128,7 @@ function getFundBalances() {
         }
     });
 
-    balances['quỹ chung'].amount += totalCollected;
+    balances['quỹ chung'].amount += (totalCollected - totalOldDebtDeducted);
     if (balances['quỹ chung'].amount < 0) balances['quỹ chung'].amount = 0;
 
     return Object.values(balances);
