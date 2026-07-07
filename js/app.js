@@ -969,7 +969,7 @@ function renderPaymentGrid() {
         const lunarStr = getLunarDate(d);
         const daysOfWeek = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
         const dayOfWeekStr = daysOfWeek[d.getDay()];
-        cell.innerHTML = `<span>${dayMonth}</span><div class="lunar-date">${lunarStr}</div><div class="lunar-date">${dayOfWeekStr}</div><div class="payment-subtext flex items-center justify-center opacity-80 mt-1">${subContent}</div>`;
+        cell.innerHTML = `<span>${dayOfWeekStr}, ${dayMonth}</span><div class="lunar-date">${lunarStr}</div><div class="payment-subtext flex items-center justify-center opacity-80 mt-1">${subContent}</div>`;
         cell.title = `${dateStr}: ${fmt(dayTotal)}`;
         cell.onclick = () => openPaymentModal(dateStr, dayTotal);
         grid.appendChild(cell);
