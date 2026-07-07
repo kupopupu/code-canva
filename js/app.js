@@ -381,7 +381,7 @@ async function handleCreateLoan(e) {
                     const dayTotal = dayPayments.reduce((s, p) => s + p.amount, 0);
                     if (dayTotal < prev.daily_payment) {
                         const amountToAdd = Math.min(prev.daily_payment - dayTotal, totalReq - currentPaid);
-                        prevPayments.push({ date: dateStr, amount: amountToAdd, time: new Date().toISOString() });
+                        prevPayments.push({ date: dateStr, amount: amountToAdd, time: new Date().toISOString(), is_deduction: true });
                         currentPaid += amountToAdd;
                     }
                 }
@@ -949,22 +949,57 @@ function renderPaymentGrid() {
         const dateStr = d.toISOString().slice(0, 10);
         const dayPayments = payments.filter(p => p.date === dateStr);
         const dayTotal = dayPayments.reduce((s, p) => s + p.amount, 0);
+        const remaining = currentLoan.daily_payment - dayTotal;
         let cls = 'payment-pending';
-        if (dayTotal >= currentLoan.daily_payment) cls = 'payment-paid';
-        else if (dayTotal > 0) cls = 'payment-partial';
-        else if (dateStr < todayDate) cls = 'payment-overdue';
-        else if (dateStr === todayDate) cls = 'payment-today';
+        let subContent = '';
+
+        if (dayTotal >= currentLoan.daily_payment) {
+            let isDeducted = dayPayments.some(p => p.is_deduction === true);
+            let dedDate = currentLoan.completed_date || todayDate;
+            
+            if (!isDeducted && currentLoan.status === 'completed' && currentLoan.completed_date) {
+                const renewalLoan = allData.find(r => r.previous_loan_id === currentLoan.loan_id);
+                if (renewalLoan) {
+                    isDeducted = dayPayments.some(p => {
+                        if (!p.time) return false;
+                        const dObj = new Date(p.time);
+                        const local = `${dObj.getFullYear()}-${String(dObj.getMonth()+1).padStart(2,'0')}-${String(dObj.getDate()).padStart(2,'0')}`;
+                        return local === currentLoan.completed_date;
+                    });
+                    dedDate = renewalLoan.start_date || currentLoan.completed_date;
+                }
+            }
+
+            if (isDeducted) {
+                if (dateStr < dedDate) {
+                    cls = 'payment-deducted-debt';
+                } else {
+                    cls = 'payment-deducted-future';
+                }
+                subContent = `<span style="font-size:14px;font-weight:900;">K</span>`;
+            } else {
+                cls = 'payment-paid';
+                subContent = `<i data-lucide="check" style="width:16px;height:16px;stroke-width:3"></i>`;
+            }
+        } else if (dayTotal > 0) {
+            cls = 'payment-partial';
+            const shortAmt = remaining >= 1000000 ? (remaining / 1000000).toFixed(1).replace('.0', '') + 'tr' : (remaining >= 1000 ? (remaining / 1000) + 'k' : remaining);
+            subContent = `-${shortAmt}`;
+        } else if (dateStr < todayDate) {
+            cls = 'payment-overdue';
+            const shortAmt = remaining >= 1000000 ? (remaining / 1000000).toFixed(1).replace('.0', '') + 'tr' : (remaining >= 1000 ? (remaining / 1000) + 'k' : remaining);
+            subContent = shortAmt;
+        } else if (dateStr === todayDate) {
+            cls = 'payment-today';
+            const shortAmt = remaining >= 1000000 ? (remaining / 1000000).toFixed(1).replace('.0', '') + 'tr' : (remaining >= 1000 ? (remaining / 1000) + 'k' : remaining);
+            subContent = shortAmt;
+        } else {
+            const shortAmt = remaining >= 1000000 ? (remaining / 1000000).toFixed(1).replace('.0', '') + 'tr' : (remaining >= 1000 ? (remaining / 1000) + 'k' : remaining);
+            subContent = shortAmt;
+        }
 
         const cell = document.createElement('div');
         cell.className = `payment-cell ${cls}`;
-        const remaining = currentLoan.daily_payment - dayTotal;
-        let subContent = '';
-        if (dayTotal >= currentLoan.daily_payment) {
-            subContent = `<i data-lucide="check" style="width:16px;height:16px;stroke-width:3"></i>`;
-        } else {
-            const shortAmt = remaining >= 1000000 ? (remaining / 1000000).toFixed(1).replace('.0', '') + 'tr' : (remaining >= 1000 ? (remaining / 1000) + 'k' : remaining);
-            subContent = dayTotal > 0 ? `-${shortAmt}` : shortAmt;
-        }
         const dayMonth = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
         const lunarStr = getLunarDate(d);
         const daysOfWeek = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];

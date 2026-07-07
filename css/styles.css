@@ -116,6 +116,16 @@
             color: #16a34a;
         }
 
+        .payment-deducted-debt {
+            background: #166534;
+            color: #ffffff;
+        }
+
+        .payment-deducted-future {
+            background: #22c55e;
+            color: #ffffff;
+        }
+
         .payment-partial {
             background: #fef3c7;
             color: #d97706;
