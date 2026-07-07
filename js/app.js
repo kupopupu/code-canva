@@ -630,6 +630,60 @@ async function handleAddMoney(e) {
     }
 }
 
+function openEditFundBalanceModal(name, currentAmount) {
+    document.getElementById('edit-fund-name').value = name;
+    document.getElementById('edit-fund-label').textContent = name;
+    document.getElementById('edit-fund-current').textContent = fmt(currentAmount);
+    document.getElementById('edit-fund-amount').value = new Intl.NumberFormat('en-US').format(Math.max(0, currentAmount));
+    document.getElementById('modal-edit-fund-balance').classList.add('show');
+}
+
+async function handleEditFundBalance(e) {
+    e.preventDefault();
+    const name = document.getElementById('edit-fund-name').value;
+    const targetAmount = getNumericValue(document.getElementById('edit-fund-amount').value);
+
+    const balances = getFundBalances();
+    const currentDisplayFund = balances.find(f => f.name.toLowerCase() === name.toLowerCase());
+    const currentDisplayAmount = currentDisplayFund ? currentDisplayFund.amount : 0;
+
+    if (targetAmount === currentDisplayAmount) {
+        closeModal('modal-edit-fund-balance');
+        return;
+    }
+
+    const difference = targetAmount - currentDisplayAmount;
+
+    const existing = allData.find(r => r.type === 'fund' && r.fund_name.toLowerCase() === name.toLowerCase());
+    
+    let record;
+    if (existing) {
+        record = {
+            ...existing,
+            fund_amount: (existing.fund_amount || 0) + difference
+        };
+    } else {
+        record = {
+            type: 'fund',
+            fund_name: name,
+            fund_amount: difference,
+            borrower_name: '', borrower_id: '', loan_id: '', principal: 0,
+            interest_rate: 0, daily_payment: 0, start_date: '', first_payment_date: '',
+            end_date: '', status: '', is_renewal: false, previous_loan_id: '',
+            old_debt_deducted: 0, source_allocations: '', payments_json: '',
+            total_paid: 0, total_interest_earned: 0, completed_date: '', notes: ''
+        };
+    }
+
+    const result = await (existing ? window.dataSdk.update(record) : window.dataSdk.create(record));
+    if (result.isOk) {
+        closeModal('modal-edit-fund-balance');
+        showToast('Đã cập nhật số dư thực tế!');
+    } else {
+        showToast('Lỗi khi cập nhật số dư');
+    }
+}
+
 // Pay Debt
 function openPayDebtModal(name, maxAmount) {
     const fundBalances = getFundBalances();
@@ -1146,12 +1200,14 @@ function renderFunds() {
                 <div class="flex gap-2 mt-1">
                     <button onclick="openPayDebtModal('${f.name}', ${Math.abs(f.amount)})" class="text-xs bg-red-100 text-red-600 px-2 py-1 rounded">Trả nợ</button>
                     <button onclick="openAddMoneyModal('${f.name}')" class="text-xs bg-green-100 text-green-600 px-2 py-1 rounded">+ Thêm tiền</button>
+                    <button onclick="openEditFundBalanceModal('${f.name}', ${f.amount})" class="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded flex items-center gap-1"><i data-lucide="edit-2" style="width:12px;height:12px"></i> Sửa</button>
                 </div>
             `;
         } else {
             actionBtn = `
                 <div class="flex gap-2 mt-1">
                     <button onclick="openAddMoneyModal('${f.name}')" class="text-xs bg-green-100 text-green-600 px-2 py-1 rounded">+ Thêm tiền</button>
+                    <button onclick="openEditFundBalanceModal('${f.name}', ${f.amount})" class="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded flex items-center gap-1"><i data-lucide="edit-2" style="width:12px;height:12px"></i> Sửa</button>
                 </div>
             `;
         }
@@ -1320,6 +1376,8 @@ window.handleCreateLoan = handleCreateLoan;
 window.handleAddFund = handleAddFund;
 window.openAddMoneyModal = openAddMoneyModal;
 window.handleAddMoney = handleAddMoney;
+window.openEditFundBalanceModal = openEditFundBalanceModal;
+window.handleEditFundBalance = handleEditFundBalance;
 window.openPayDebtModal = openPayDebtModal;
 window.handlePayDebt = handlePayDebt;
 window.openPaymentModal = openPaymentModal;

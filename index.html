@@ -20,8 +20,9 @@
 </head>
 
 <body data-template-id="__page-root" class="min-h-screen"><!-- Header -->
-    <header class="sticky top-0 z-30 bg-white/90 backdrop-blur-sm border-b border-gray-100 px-4 py-3">
+    <header class="sticky top-0 z-30 bg-white/90 backdrop-blur-sm border-b border-gray-100 px-4 py-3 flex justify-between items-center">
         <h1 data-template-id="app-header" class="canva-header text-lg font-bold text-gray-800"></h1>
+        <span class="text-[10px] font-mono text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full border border-gray-200">v1.1.0</span>
     </header><!-- Dashboard View -->
     <div id="view-dashboard" class="view active px-4 pt-4">
         <div class="grid grid-cols-2 gap-3 mb-4">
@@ -395,7 +396,27 @@
                         thêm</label>
                     <input id="add-money-amount" type="text" inputmode="numeric" class="input-field" required
                         oninput="formatCurrency(this)">
-                </div><button type="submit" class="btn-primary">Xác nhận thêm</button>
+            </form>
+        </div>
+    </div>
+    <!-- Edit Fund Balance Modal -->
+    <div id="modal-edit-fund-balance" class="modal-overlay">
+        <div class="modal-sheet">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="font-bold text-lg text-gray-800">Sửa số dư quỹ</h2><button
+                    onclick="closeModal('modal-edit-fund-balance')" aria-label="Đóng" class="p-1"><i data-lucide="x"
+                        class="icon-xl"></i></button>
+            </div>
+            <form id="edit-fund-balance-form" class="space-y-3" onsubmit="handleEditFundBalance(event)">
+                <input type="hidden" id="edit-fund-name">
+                <div class="bg-gray-50 p-3 rounded-lg text-sm mb-3">
+                    Nguồn vốn: <span id="edit-fund-label" class="font-bold text-gray-800"></span>
+                    <br>Số dư trên app: <span id="edit-fund-current" class="font-bold text-blue-600"></span>
+                </div>
+                <div><label class="text-xs font-medium text-gray-600 mb-1 block" for="edit-fund-amount">Số dư thực tế mới</label>
+                    <input id="edit-fund-amount" type="text" inputmode="numeric" class="input-field" required
+                        oninput="formatCurrency(this)">
+                </div><button type="submit" class="btn-primary">Lưu thay đổi</button>
             </form>
         </div>
     </div><!-- Payment Modal -->
