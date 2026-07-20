@@ -213,32 +213,41 @@ function populatePrevLoanSelect() {
 
 function calculateLoanInfo() {
     const principal = getNumericValue(document.getElementById('loan-principal').value);
+    const dailyPayment = getNumericValue(document.getElementById('loan-daily').value);
     const duration = Number(document.getElementById('loan-duration').value) || 0;
-    const interestDays = Number(document.getElementById('loan-interest-days').value) || 0;
     const startDateVal = document.getElementById('loan-start-date').value;
 
-    if (principal > 0 && duration > 0) {
-        const daily = Math.round(principal / duration);
-        document.getElementById('loan-daily').value = new Intl.NumberFormat('en-US').format(daily);
+    if (dailyPayment > 0 && duration > 0) {
+        const totalAmount = dailyPayment * duration;
+        const interestAmount = Math.max(0, totalAmount - principal);
+        const interestRate = principal > 0 ? ((totalAmount - principal) / principal) * 100 : 0;
+
+        document.getElementById('loan-total-display').textContent = fmt(totalAmount);
+        const rateStr = interestRate % 1 === 0 ? interestRate.toFixed(0) : interestRate.toFixed(1);
+        document.getElementById('loan-interest-display').textContent = `${fmt(interestAmount)} (${rateStr}%)`;
 
         if (startDateVal) {
             const start = new Date(startDateVal);
-            const totalDays = duration + interestDays;
-            start.setDate(start.getDate() + totalDays);
+            start.setDate(start.getDate() + duration - 1);
             document.getElementById('loan-end-date').value = start.toISOString().slice(0, 10);
         }
     } else {
-        document.getElementById('loan-daily').value = '';
+        document.getElementById('loan-total-display').textContent = '0đ';
+        document.getElementById('loan-interest-display').textContent = '0đ';
         document.getElementById('loan-end-date').value = '';
     }
+    updateAmountToGive();
 }
 
 document.getElementById('loan-principal').addEventListener('input', function () {
     formatCurrency(this);
     calculateLoanInfo();
 });
+document.getElementById('loan-daily').addEventListener('input', function () {
+    formatCurrency(this);
+    calculateLoanInfo();
+});
 document.getElementById('loan-duration').addEventListener('input', calculateLoanInfo);
-document.getElementById('loan-interest-days').addEventListener('input', calculateLoanInfo);
 document.getElementById('loan-give-date').addEventListener('change', function () {
     if (this.value) {
         const d = new Date(this.value);
@@ -254,10 +263,13 @@ async function handleCreateLoan(e) {
     e.preventDefault();
     if (allData.length >= 999) { showToast('Đã đạt giới hạn dữ liệu'); return; }
 
-    // Validate that computed fields are populated
+    const principal = getNumericValue(document.getElementById('loan-principal').value);
+    const dailyPayment = getNumericValue(document.getElementById('loan-daily').value);
+    const duration = Number(document.getElementById('loan-duration').value);
     const endDate = document.getElementById('loan-end-date').value;
-    if (!endDate) {
-        showToast('Vui lòng điền đầy đủ thông tin: Số ngày góp gốc và Số ngày lãi phải > 0');
+
+    if (!endDate || dailyPayment <= 0 || duration <= 0) {
+        showToast('Vui lòng điền đầy đủ thông tin: Tiền góp/ngày và Số ngày cần góp phải > 0');
         return;
     }
 
@@ -265,11 +277,8 @@ async function handleCreateLoan(e) {
     btn.disabled = true; btn.textContent = 'Đang tạo...';
 
     const loanType = document.querySelector('[name="loan-type"]:checked').value;
-    const principal = getNumericValue(document.getElementById('loan-principal').value);
-    const duration = Number(document.getElementById('loan-duration').value);
-    const interestDays = Number(document.getElementById('loan-interest-days').value);
-    const dailyPayment = principal > 0 && duration > 0 ? Math.round(principal / duration) : 0;
-    const interestRate = principal > 0 ? ((interestDays * dailyPayment) / principal) * 100 : 0;
+    const totalAmount = dailyPayment * duration;
+    const interestRate = principal > 0 ? ((totalAmount - principal) / principal) * 100 : 0;
 
     let totalFundAmount = 0;
     let sourceAllocations = [];
@@ -421,10 +430,8 @@ function openEditLoanModal() {
     document.getElementById('edit-loan-id').value = currentLoan.loan_id;
     document.getElementById('edit-loan-borrower').value = currentLoan.borrower_name;
 
-    const duration = Math.round(currentLoan.principal / currentLoan.daily_payment) || 0;
     const totalRequired = currentLoan.principal * (1 + currentLoan.interest_rate / 100);
-    const interestAmt = totalRequired - currentLoan.principal;
-    const interestDays = interestAmt > 0 ? Math.round(interestAmt / currentLoan.daily_payment) : 0;
+    const duration = currentLoan.daily_payment > 0 ? Math.round(totalRequired / currentLoan.daily_payment) : 0;
 
     let giveDate = currentLoan.start_date;
     if (!giveDate) {
@@ -436,8 +443,8 @@ function openEditLoanModal() {
     document.getElementById('edit-loan-give-date').value = giveDate;
     document.getElementById('edit-loan-start-date').value = currentLoan.first_payment_date;
     document.getElementById('edit-loan-principal').value = new Intl.NumberFormat('en-US').format(currentLoan.principal);
+    document.getElementById('edit-loan-daily').value = new Intl.NumberFormat('en-US').format(currentLoan.daily_payment);
     document.getElementById('edit-loan-duration').value = duration;
-    document.getElementById('edit-loan-interest-days').value = interestDays;
 
     calculateEditLoanInfo();
     document.getElementById('modal-edit-loan').classList.add('show');
@@ -445,26 +452,40 @@ function openEditLoanModal() {
 
 function calculateEditLoanInfo() {
     const principal = getNumericValue(document.getElementById('edit-loan-principal').value);
+    const dailyPayment = getNumericValue(document.getElementById('edit-loan-daily').value);
     const duration = Number(document.getElementById('edit-loan-duration').value) || 0;
-    const interestDays = Number(document.getElementById('edit-loan-interest-days').value) || 0;
     const startDateVal = document.getElementById('edit-loan-start-date').value;
 
-    if (principal > 0 && duration > 0) {
-        const daily = Math.round(principal / duration);
-        document.getElementById('edit-loan-daily').value = new Intl.NumberFormat('en-US').format(daily);
+    if (dailyPayment > 0 && duration > 0) {
+        const totalAmount = dailyPayment * duration;
+        const interestAmount = Math.max(0, totalAmount - principal);
+        const interestRate = principal > 0 ? ((totalAmount - principal) / principal) * 100 : 0;
+
+        document.getElementById('edit-loan-total-display').textContent = fmt(totalAmount);
+        const rateStr = interestRate % 1 === 0 ? interestRate.toFixed(0) : interestRate.toFixed(1);
+        document.getElementById('edit-loan-interest-display').textContent = `${fmt(interestAmount)} (${rateStr}%)`;
 
         if (startDateVal) {
             const start = new Date(startDateVal);
-            const totalDays = duration + interestDays;
-            start.setDate(start.getDate() + totalDays);
+            start.setDate(start.getDate() + duration - 1);
             document.getElementById('edit-loan-end-date').value = start.toISOString().slice(0, 10);
         }
     } else {
-        document.getElementById('edit-loan-daily').value = '';
+        document.getElementById('edit-loan-total-display').textContent = '0đ';
+        document.getElementById('edit-loan-interest-display').textContent = '0đ';
         document.getElementById('edit-loan-end-date').value = '';
     }
 }
 
+document.getElementById('edit-loan-principal').addEventListener('input', function () {
+    formatCurrency(this);
+    calculateEditLoanInfo();
+});
+document.getElementById('edit-loan-daily').addEventListener('input', function () {
+    formatCurrency(this);
+    calculateEditLoanInfo();
+});
+document.getElementById('edit-loan-duration').addEventListener('input', calculateEditLoanInfo);
 document.getElementById('edit-loan-give-date').addEventListener('change', function () {
     if (this.value) {
         const d = new Date(this.value);
@@ -478,21 +499,21 @@ document.getElementById('edit-loan-start-date').addEventListener('change', calcu
 async function handleEditLoan(e) {
     e.preventDefault();
 
-    // Validate that computed fields are populated
     const endDate = document.getElementById('edit-loan-end-date').value;
-    if (!endDate) {
-        showToast('Vui lòng điền đầy đủ thông tin: Số ngày góp gốc và Số ngày lãi phải > 0');
+    const principal = getNumericValue(document.getElementById('edit-loan-principal').value);
+    const dailyPayment = getNumericValue(document.getElementById('edit-loan-daily').value);
+    const duration = Number(document.getElementById('edit-loan-duration').value);
+
+    if (!endDate || dailyPayment <= 0 || duration <= 0) {
+        showToast('Vui lòng điền đầy đủ thông tin: Tiền góp/ngày và Số ngày cần góp phải > 0');
         return;
     }
 
     const btn = document.getElementById('btn-submit-edit-loan');
     btn.disabled = true; btn.textContent = 'Đang lưu...';
 
-    const principal = getNumericValue(document.getElementById('edit-loan-principal').value);
-    const duration = Number(document.getElementById('edit-loan-duration').value);
-    const interestDays = Number(document.getElementById('edit-loan-interest-days').value);
-    const dailyPayment = principal > 0 && duration > 0 ? Math.round(principal / duration) : 0;
-    const interestRate = principal > 0 ? ((interestDays * dailyPayment) / principal) * 100 : 0;
+    const totalAmount = dailyPayment * duration;
+    const interestRate = principal > 0 ? ((totalAmount - principal) / principal) * 100 : 0;
     const borrowerName = document.getElementById('edit-loan-borrower').value;
 
     const updatedLoan = {

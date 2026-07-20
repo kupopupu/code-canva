@@ -20,9 +20,11 @@
 </head>
 
 <body data-template-id="__page-root" class="min-h-screen"><!-- Header -->
-    <header class="sticky top-0 z-30 bg-white/90 backdrop-blur-sm border-b border-gray-100 px-4 py-3 flex justify-between items-center">
+    <header
+        class="sticky top-0 z-30 bg-white/90 backdrop-blur-sm border-b border-gray-100 px-4 py-3 flex justify-between items-center">
         <h1 data-template-id="app-header" class="canva-header text-lg font-bold text-gray-800"></h1>
-        <span class="text-[10px] font-mono text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full border border-gray-200">v1.1.0</span>
+        <span
+            class="text-[10px] font-mono text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full border border-gray-200">v1.1.0</span>
     </header><!-- Dashboard View -->
     <div id="view-dashboard" class="view active px-4 pt-4">
         <div class="grid grid-cols-2 gap-3 mb-4">
@@ -243,25 +245,29 @@
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div class="min-w-0"><label class="text-xs font-medium text-gray-600 mb-1 block"
-                            for="loan-duration">Số ngày góp gốc</label>
-                        <input id="loan-duration" type="number" inputmode="numeric" min="0" class="input-field" required
-                            oninput="calculateLoanInfo()">
+                            for="loan-daily">Tiền góp/ngày</label>
+                        <input id="loan-daily" type="text" inputmode="numeric" class="input-field" required
+                            placeholder="VD: 150.000" oninput="formatCurrency(this); calculateLoanInfo()">
                     </div>
                     <div class="min-w-0"><label class="text-xs font-medium text-gray-600 mb-1 block"
-                            for="loan-interest-days">Số ngày lãi</label>
-                        <input id="loan-interest-days" type="number" inputmode="numeric" min="0" class="input-field"
-                            required value="0" oninput="calculateLoanInfo()">
+                            for="loan-duration">Số ngày cần góp</label>
+                        <input id="loan-duration" type="number" inputmode="numeric" min="1" class="input-field" required
+                            placeholder="VD: 40" oninput="calculateLoanInfo()">
                     </div>
                 </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div class="min-w-0"><label class="text-xs font-medium text-gray-600 mb-1 block"
-                            for="loan-daily">Tiền góp/ngày</label>
-                        <input id="loan-daily" type="text" class="input-field bg-gray-50" readonly>
+                <div class="p-3 bg-gray-50 border border-gray-100 rounded-lg space-y-1 text-xs">
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Tổng tiền phải góp:</span>
+                        <span id="loan-total-display" class="font-bold text-gray-800">0đ</span>
                     </div>
-                    <div class="min-w-0"><label class="text-xs font-medium text-gray-600 mb-1 block"
-                            for="loan-end-date">Ngày kết thúc</label>
-                        <input id="loan-end-date" type="date" class="input-field bg-gray-50" readonly>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Tiền lãi:</span>
+                        <span id="loan-interest-display" class="font-bold text-green-600">0đ</span>
                     </div>
+                </div>
+                <div><label class="text-xs font-medium text-gray-600 mb-1 block"
+                        for="loan-end-date">Ngày kết thúc</label>
+                    <input id="loan-end-date" type="date" class="input-field bg-gray-50" readonly>
                 </div>
                 <div><label class="text-xs font-medium text-gray-600 mb-1 block">Loại khoản vay</label>
                     <div class="flex gap-3"><label class="flex items-center gap-2 text-sm"><input type="radio"
@@ -341,21 +347,29 @@
                         class="input-field" required oninput="formatCurrency(this); calculateEditLoanInfo()"></div>
                 <div class="grid grid-cols-2 gap-3">
                     <div class="min-w-0"><label class="text-xs font-medium text-gray-600 mb-1 block"
-                            for="edit-loan-duration">Số ngày góp gốc</label> <input id="edit-loan-duration"
-                            type="number" inputmode="numeric" min="0" class="input-field" required
-                            oninput="calculateEditLoanInfo()"></div>
+                            for="edit-loan-daily">Tiền góp/ngày</label>
+                        <input id="edit-loan-daily" type="text" inputmode="numeric" class="input-field" required
+                            oninput="formatCurrency(this); calculateEditLoanInfo()">
+                    </div>
                     <div class="min-w-0"><label class="text-xs font-medium text-gray-600 mb-1 block"
-                            for="edit-loan-interest-days">Số ngày lãi</label> <input id="edit-loan-interest-days"
-                            type="number" inputmode="numeric" min="0" class="input-field" required value="0"
-                            oninput="calculateEditLoanInfo()"></div>
+                            for="edit-loan-duration">Số ngày cần góp</label>
+                        <input id="edit-loan-duration" type="number" inputmode="numeric" min="1" class="input-field" required
+                            oninput="calculateEditLoanInfo()">
+                    </div>
                 </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div class="min-w-0"><label class="text-xs font-medium text-gray-600 mb-1 block"
-                            for="edit-loan-daily">Tiền góp/ngày</label> <input id="edit-loan-daily" type="text"
-                            class="input-field bg-gray-50" readonly></div>
-                    <div class="min-w-0"><label class="text-xs font-medium text-gray-600 mb-1 block"
-                            for="edit-loan-end-date">Ngày kết thúc</label> <input id="edit-loan-end-date" type="date"
-                            class="input-field bg-gray-50" readonly></div>
+                <div class="p-3 bg-gray-50 border border-gray-100 rounded-lg space-y-1 text-xs">
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Tổng tiền phải góp:</span>
+                        <span id="edit-loan-total-display" class="font-bold text-gray-800">0đ</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Tiền lãi:</span>
+                        <span id="edit-loan-interest-display" class="font-bold text-green-600">0đ</span>
+                    </div>
+                </div>
+                <div><label class="text-xs font-medium text-gray-600 mb-1 block"
+                        for="edit-loan-end-date">Ngày kết thúc</label>
+                    <input id="edit-loan-end-date" type="date" class="input-field bg-gray-50" readonly>
                 </div>
                 <button type="submit" id="btn-submit-edit-loan" class="btn-primary mt-2">Lưu thay đổi</button>
             </form>
@@ -392,8 +406,10 @@
                 <div class="bg-gray-50 p-3 rounded-lg text-sm mb-3">
                     Nguồn vốn: <span id="add-money-fund-label" class="font-bold text-gray-800"></span>
                 </div>
-                <div><label class="text-xs font-medium text-gray-600 mb-1 block" for="add-money-amount">Số tiền thêm</label>
-                    <input id="add-money-amount" type="text" inputmode="numeric" class="input-field" required oninput="formatCurrency(this)">
+                <div><label class="text-xs font-medium text-gray-600 mb-1 block" for="add-money-amount">Số tiền
+                        thêm</label>
+                    <input id="add-money-amount" type="text" inputmode="numeric" class="input-field" required
+                        oninput="formatCurrency(this)">
                 </div>
                 <button type="submit" class="btn-primary">Xác nhận thêm</button>
             </form>
@@ -413,7 +429,8 @@
                     Nguồn vốn: <span id="edit-fund-label" class="font-bold text-gray-800"></span>
                     <br>Số dư trên app: <span id="edit-fund-current" class="font-bold text-blue-600"></span>
                 </div>
-                <div><label class="text-xs font-medium text-gray-600 mb-1 block" for="edit-fund-amount">Số dư thực tế mới</label>
+                <div><label class="text-xs font-medium text-gray-600 mb-1 block" for="edit-fund-amount">Số dư thực tế
+                        mới</label>
                     <input id="edit-fund-amount" type="text" inputmode="numeric" class="input-field" required
                         oninput="formatCurrency(this)">
                 </div><button type="submit" class="btn-primary">Lưu thay đổi</button>
